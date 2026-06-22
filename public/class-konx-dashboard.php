@@ -27,6 +27,36 @@ class Konx_Dashboard {
 		add_action( 'admin_post_konx_affiliate_withdrawal', array( __CLASS__, 'handle_withdrawal_form' ) );
 		add_action( 'admin_post_nopriv_konx_affiliate_withdrawal', '__return_false' );
 		add_action( 'template_redirect', array( __CLASS__, 'redirect_affiliate_from_myaccount' ) );
+		add_action( 'woocommerce_before_my_account', array( __CLASS__, 'render_myaccount_dashboard_link' ) );
+	}
+
+	/**
+	 * Show an "Affiliate Dashboard" banner on the WooCommerce my-account page.
+	 */
+	public static function render_myaccount_dashboard_link() {
+		if ( ! is_user_logged_in() ) {
+			return;
+		}
+
+		$affiliate = Konx_Affiliate_Manager::get_affiliate_by_user( get_current_user_id() );
+		if ( ! $affiliate ) {
+			return;
+		}
+
+		$dashboard_url = get_permalink( self::get_dashboard_page_id() );
+		if ( ! $dashboard_url ) {
+			return;
+		}
+
+		printf(
+			'<div style="background:#f0f6fc;border:1px solid #72aee6;border-radius:6px;padding:14px 20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;">'
+			. '<span>%s</span>'
+			. '<a href="%s" style="background:#2271b1;color:#fff;padding:8px 16px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px;">%s</a>'
+			. '</div>',
+			esc_html__( 'You have an affiliate account with KonX.', 'konx-affiliate-dashboard' ),
+			esc_url( $dashboard_url ),
+			esc_html__( 'Go to Affiliate Dashboard', 'konx-affiliate-dashboard' )
+		);
 	}
 
 	/**
