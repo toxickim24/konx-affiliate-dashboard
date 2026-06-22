@@ -36,7 +36,7 @@ $fee       = $data['fee_status'];
 		<span><?php printf( esc_html__( 'Welcome, %s', 'konx-affiliate-dashboard' ), esc_html( wp_get_current_user()->display_name ) ); ?></span>
 		<div class="konx-topbar-links">
 			<?php if ( function_exists( 'wc_get_page_id' ) ) : ?>
-				<a href="<?php echo esc_url( add_query_arg( 'stay', '1', get_permalink( wc_get_page_id( 'myaccount' ) ) ) ); ?>" class="konx-btn konx-btn-sm">
+				<a href="<?php echo esc_url( get_permalink( wc_get_page_id( 'myaccount' ) ) ); ?>" class="konx-btn konx-btn-sm">
 					<?php esc_html_e( 'My Orders', 'konx-affiliate-dashboard' ); ?>
 				</a>
 			<?php endif; ?>

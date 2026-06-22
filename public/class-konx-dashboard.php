@@ -26,7 +26,7 @@ class Konx_Dashboard {
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'maybe_enqueue_assets' ) );
 		add_action( 'admin_post_konx_affiliate_withdrawal', array( __CLASS__, 'handle_withdrawal_form' ) );
 		add_action( 'admin_post_nopriv_konx_affiliate_withdrawal', '__return_false' );
-		add_action( 'template_redirect', array( __CLASS__, 'redirect_affiliate_from_myaccount' ) );
+		// No automatic redirect — affiliates see a banner on my-account instead.
 		add_action( 'woocommerce_before_my_account', array( __CLASS__, 'render_myaccount_dashboard_link' ) );
 	}
 
