@@ -183,6 +183,10 @@ function konx_affiliate_init() {
 		Konx_Install::maybe_upgrade( $installed_db_version );
 	}
 
+	// Referral tracking and order attribution (frontend + AJAX).
+	Konx_Referral_Tracker::init();
+	Konx_Order_Attribution::init();
+
 	// Initialize admin pages.
 	if ( is_admin() ) {
 		Konx_Admin_Product_Mapping::init();
