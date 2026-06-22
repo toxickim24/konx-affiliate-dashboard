@@ -13,7 +13,7 @@
  * Text Domain:       konx-affiliate-dashboard
  * Domain Path:       /languages
  * WC requires at least: 6.0
- * WC tested up to:   8.0
+ * WC tested up to:   9.0
  *
  * @package KonxAffiliateDashboard
  */
@@ -23,24 +23,98 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-// Plugin constants.
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 define( 'KONX_AFFILIATE_VERSION', '1.0.0' );
+define( 'KONX_AFFILIATE_DB_VERSION', '1.0.0' );
 define( 'KONX_AFFILIATE_PLUGIN_FILE', __FILE__ );
 define( 'KONX_AFFILIATE_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'KONX_AFFILIATE_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'KONX_AFFILIATE_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 
+// ---------------------------------------------------------------------------
+// Autoloader
+// ---------------------------------------------------------------------------
+require_once KONX_AFFILIATE_PLUGIN_DIR . 'includes/class-konx-autoloader.php';
+Konx_Autoloader::register();
+
+// ---------------------------------------------------------------------------
+// WooCommerce HPOS Compatibility
+// ---------------------------------------------------------------------------
+add_action( 'before_woocommerce_init', function () {
+	if ( class_exists( \Automattic\WooCommerce\Utilities\FeaturesUtil::class ) ) {
+		\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility(
+			'custom_order_tables',
+			__FILE__,
+			true
+		);
+	}
+} );
+
+// ---------------------------------------------------------------------------
+// Dependency Checks
+// ---------------------------------------------------------------------------
+
 /**
- * Check if WooCommerce is active.
+ * Check if WooCommerce is active (multisite-aware).
  *
  * @return bool
  */
 function konx_affiliate_is_woocommerce_active() {
-	return in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', get_option( 'active_plugins' ) ), true );
+	$active = apply_filters( 'active_plugins', get_option( 'active_plugins' ) );
+
+	if ( in_array( 'woocommerce/woocommerce.php', $active, true ) ) {
+		return true;
+	}
+
+	if ( is_multisite() ) {
+		$network = get_site_option( 'active_sitewide_plugins' );
+		if ( isset( $network['woocommerce/woocommerce.php'] ) ) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 /**
- * Display admin notice if WooCommerce is not active.
+ * Check if YITH WooCommerce Subscription is active (multisite-aware).
+ *
+ * Matches both free and premium editions by checking for
+ * 'yith-woocommerce-subscription' anywhere in the plugin path.
+ *
+ * @return bool
+ */
+function konx_affiliate_is_yith_active() {
+	$active = apply_filters( 'active_plugins', get_option( 'active_plugins' ) );
+
+	foreach ( $active as $plugin ) {
+		if ( false !== strpos( $plugin, 'yith-woocommerce-subscription' ) ) {
+			return true;
+		}
+	}
+
+	if ( is_multisite() ) {
+		$network = get_site_option( 'active_sitewide_plugins' );
+		if ( is_array( $network ) ) {
+			foreach ( array_keys( $network ) as $plugin ) {
+				if ( false !== strpos( $plugin, 'yith-woocommerce-subscription' ) ) {
+					return true;
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
+// ---------------------------------------------------------------------------
+// Admin Notices
+// ---------------------------------------------------------------------------
+
+/**
+ * Admin notice: WooCommerce is required.
  */
 function konx_affiliate_woocommerce_missing_notice() {
 	?>
@@ -58,14 +132,55 @@ function konx_affiliate_woocommerce_missing_notice() {
 }
 
 /**
- * Initialize the plugin.
+ * Admin notice: YITH Subscription is recommended.
+ */
+function konx_affiliate_yith_missing_notice() {
+	?>
+	<div class="notice notice-warning is-dismissible">
+		<p>
+			<?php
+			esc_html_e(
+				'KonX Affiliate Dashboard: Recurring commissions require YITH WooCommerce Subscription. One-time commissions are unaffected.',
+				'konx-affiliate-dashboard'
+			);
+			?>
+		</p>
+	</div>
+	<?php
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle Hooks
+// ---------------------------------------------------------------------------
+register_activation_hook( __FILE__, array( 'Konx_Install', 'activate' ) );
+register_deactivation_hook( __FILE__, array( 'Konx_Deactivator', 'deactivate' ) );
+
+// ---------------------------------------------------------------------------
+// Plugin Initialization
+// ---------------------------------------------------------------------------
+
+/**
+ * Initialize the plugin on plugins_loaded.
+ *
+ * Checks WooCommerce dependency, shows YITH notice if missing,
+ * and runs database upgrade check.
  */
 function konx_affiliate_init() {
+	// Hard dependency: WooCommerce must be active.
 	if ( ! konx_affiliate_is_woocommerce_active() ) {
 		add_action( 'admin_notices', 'konx_affiliate_woocommerce_missing_notice' );
 		return;
 	}
 
-	// Plugin initialization will go here.
+	// Soft dependency: YITH Subscription is recommended.
+	if ( ! konx_affiliate_is_yith_active() ) {
+		add_action( 'admin_notices', 'konx_affiliate_yith_missing_notice' );
+	}
+
+	// Run database upgrade if the stored version differs.
+	$installed_db_version = get_option( 'konx_affiliate_db_version' );
+	if ( $installed_db_version !== KONX_AFFILIATE_DB_VERSION ) {
+		Konx_Install::maybe_upgrade( $installed_db_version );
+	}
 }
 add_action( 'plugins_loaded', 'konx_affiliate_init' );
