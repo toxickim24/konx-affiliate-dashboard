@@ -28,19 +28,11 @@ class Konx_Admin_Product_Mapping {
 	}
 
 	/**
-	 * Register the admin menu page.
+	 * Register the submenu page.
+	 *
+	 * The top-level menu is registered by Konx_Admin_Dashboard.
 	 */
 	public static function register_menu() {
-		add_menu_page(
-			__( 'KonX Affiliates', 'konx-affiliate-dashboard' ),
-			__( 'KonX Affiliates', 'konx-affiliate-dashboard' ),
-			'manage_konx_settings',
-			'konx-affiliate-dashboard',
-			array( __CLASS__, 'render_page' ),
-			'dashicons-groups',
-			58
-		);
-
 		add_submenu_page(
 			'konx-affiliate-dashboard',
 			__( 'Product Mapping', 'konx-affiliate-dashboard' ),
