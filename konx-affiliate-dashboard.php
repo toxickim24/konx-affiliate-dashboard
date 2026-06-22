@@ -187,6 +187,9 @@ function konx_affiliate_init() {
 	Konx_Referral_Tracker::init();
 	Konx_Order_Attribution::init();
 
+	// Frontend affiliate dashboard shortcode.
+	Konx_Dashboard::init();
+
 	// Commission engines.
 	Konx_Commission_Engine::init();
 	Konx_Recurring_Commission_Engine::init();
