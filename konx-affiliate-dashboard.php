@@ -191,9 +191,13 @@ function konx_affiliate_init() {
 	Konx_Commission_Engine::init();
 	Konx_Recurring_Commission_Engine::init();
 
+	// Admin fee cron handler.
+	Konx_Admin_Fees::init();
+
 	// Initialize admin pages.
 	if ( is_admin() ) {
 		Konx_Admin_Product_Mapping::init();
+		Konx_Admin_Fees_Page::init();
 	}
 }
 add_action( 'plugins_loaded', 'konx_affiliate_init' );

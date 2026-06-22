@@ -81,7 +81,7 @@ class Konx_Recurring_Commission_Engine {
 		}
 
 		// Check admin fee status once for entire renewal order.
-		$is_fee_blocked = self::has_unpaid_admin_fee( (int) $affiliate->id );
+		$is_fee_blocked = ! Konx_Admin_Fees::can_affiliate_earn( (int) $affiliate->id );
 
 		// Create conversion record for this renewal (idempotent).
 		$conversion_id = self::create_renewal_conversion( $renewal_order, $affiliate, $subscription_id );
@@ -492,28 +492,6 @@ class Konx_Recurring_Commission_Engine {
 				absint( $order_id ),
 				absint( $item_id ),
 				Konx_Commission_Engine::TYPE_RECURRING
-			)
-		);
-
-		return $count > 0;
-	}
-
-	/**
-	 * Check if the affiliate has unpaid admin fees.
-	 *
-	 * @param int $affiliate_id Affiliate ID.
-	 * @return bool
-	 */
-	private static function has_unpaid_admin_fee( $affiliate_id ) {
-		global $wpdb;
-
-		$table = $wpdb->prefix . 'konx_admin_fees';
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-		$count = (int) $wpdb->get_var(
-			$wpdb->prepare(
-				"SELECT COUNT(*) FROM {$table} WHERE affiliate_id = %d AND status IN ('unpaid', 'overdue')",
-				absint( $affiliate_id )
 			)
 		);
 

@@ -25,6 +25,7 @@ class Konx_Install {
 		Konx_Roles::add_roles();
 		self::seed_commission_rules();
 		self::generate_ip_hash_salt();
+		Konx_Admin_Fees::schedule_cron();
 
 		update_option( 'konx_affiliate_version', KONX_AFFILIATE_VERSION );
 		update_option( 'konx_affiliate_db_version', KONX_AFFILIATE_DB_VERSION );

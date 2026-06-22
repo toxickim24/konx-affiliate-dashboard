@@ -109,7 +109,7 @@ class Konx_Commission_Engine {
 		}
 
 		// Check admin fee status ONCE for the entire order.
-		$is_fee_blocked = self::has_unpaid_admin_fee( $affiliate_id );
+		$is_fee_blocked = ! Konx_Admin_Fees::can_affiliate_earn( $affiliate_id );
 
 		// Look up the conversion record for this order.
 		$conversion = self::get_conversion_by_order( $order_id );
@@ -497,28 +497,6 @@ class Konx_Commission_Engine {
 				"SELECT COUNT(*) FROM {$table} WHERE order_id = %d AND order_item_id = %d",
 				absint( $order_id ),
 				absint( $item_id )
-			)
-		);
-
-		return $count > 0;
-	}
-
-	/**
-	 * Check if the affiliate has unpaid admin fees.
-	 *
-	 * @param int $affiliate_id The affiliate table ID.
-	 * @return bool True if there are unpaid or overdue fees.
-	 */
-	private static function has_unpaid_admin_fee( $affiliate_id ) {
-		global $wpdb;
-
-		$table = $wpdb->prefix . 'konx_admin_fees';
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-		$count = (int) $wpdb->get_var(
-			$wpdb->prepare(
-				"SELECT COUNT(*) FROM {$table} WHERE affiliate_id = %d AND status IN ('unpaid', 'overdue')",
-				absint( $affiliate_id )
 			)
 		);
 
