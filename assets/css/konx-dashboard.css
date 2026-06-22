@@ -29,6 +29,11 @@
 	font-size: 14px;
 }
 
+.konx-topbar-links {
+	display: flex;
+	gap: 8px;
+}
+
 .konx-section {
 	background: #fff;
 	border: 1px solid #dcdcde;

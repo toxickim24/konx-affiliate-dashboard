@@ -30,12 +30,20 @@ class Konx_Dashboard {
 	}
 
 	/**
-	 * Redirect affiliate users from WooCommerce my-account to the affiliate dashboard.
+	 * Redirect affiliate users from WooCommerce my-account to the affiliate
+	 * dashboard, unless they explicitly want to stay on my-account.
 	 *
-	 * Regular WooCommerce customers are not affected.
+	 * The redirect only fires on the main my-account endpoint (not sub-pages
+	 * like /my-account/orders/ or /my-account/edit-account/). A ?stay=1
+	 * parameter bypasses the redirect so the "My Orders" link works.
 	 */
 	public static function redirect_affiliate_from_myaccount() {
 		if ( ! is_user_logged_in() || ! function_exists( 'wc_get_page_id' ) ) {
+			return;
+		}
+
+		// Allow affiliates to stay on my-account if they choose.
+		if ( isset( $_GET['stay'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			return;
 		}
 
@@ -44,9 +52,14 @@ class Konx_Dashboard {
 			return;
 		}
 
+		// Only redirect from the main my-account page, not sub-endpoints.
+		if ( is_wc_endpoint_url() ) {
+			return;
+		}
+
 		$affiliate = Konx_Affiliate_Manager::get_affiliate_by_user( get_current_user_id() );
 		if ( ! $affiliate ) {
-			return; // Not an affiliate — let WooCommerce handle it.
+			return;
 		}
 
 		$dashboard_url = get_permalink( self::get_dashboard_page_id() );
