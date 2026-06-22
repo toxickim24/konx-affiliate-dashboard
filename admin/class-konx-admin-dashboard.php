@@ -148,6 +148,30 @@ class Konx_Admin_Dashboard {
 					<?php endif; ?>
 				</div>
 			</div>
+
+			<!-- Quick Links -->
+			<div class="konx-grid-3" style="margin-top:20px;">
+				<div class="konx-card">
+					<h2><span class="dashicons dashicons-download" style="color:#2271b1;margin-right:6px;"></span><?php esc_html_e( 'Export Data', 'konx-affiliate-dashboard' ); ?></h2>
+					<p style="font-size:13px;color:#646970;margin:0 0 12px;"><?php esc_html_e( 'Download CSV reports for your records.', 'konx-affiliate-dashboard' ); ?></p>
+					<div style="display:flex;flex-wrap:wrap;gap:6px;">
+						<a href="<?php echo esc_url( Konx_Export_Manager::get_export_url( 'affiliates' ) ); ?>" class="button button-small"><?php esc_html_e( 'Affiliates', 'konx-affiliate-dashboard' ); ?></a>
+						<a href="<?php echo esc_url( Konx_Export_Manager::get_export_url( 'commissions' ) ); ?>" class="button button-small"><?php esc_html_e( 'Commissions', 'konx-affiliate-dashboard' ); ?></a>
+						<a href="<?php echo esc_url( Konx_Export_Manager::get_export_url( 'withdrawals' ) ); ?>" class="button button-small"><?php esc_html_e( 'Withdrawals', 'konx-affiliate-dashboard' ); ?></a>
+						<a href="<?php echo esc_url( Konx_Export_Manager::get_export_url( 'milestones' ) ); ?>" class="button button-small"><?php esc_html_e( 'Milestones', 'konx-affiliate-dashboard' ); ?></a>
+					</div>
+				</div>
+				<div class="konx-card">
+					<h2><span class="dashicons dashicons-admin-tools" style="color:#2271b1;margin-right:6px;"></span><?php esc_html_e( 'System Status', 'konx-affiliate-dashboard' ); ?></h2>
+					<p style="font-size:13px;color:#646970;margin:0 0 12px;"><?php esc_html_e( 'Check plugin health, database, and requirements.', 'konx-affiliate-dashboard' ); ?></p>
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=konx-system-status' ) ); ?>" class="button button-small"><?php esc_html_e( 'View Status', 'konx-affiliate-dashboard' ); ?></a>
+				</div>
+				<div class="konx-card">
+					<h2><span class="dashicons dashicons-editor-help" style="color:#2271b1;margin-right:6px;"></span><?php esc_html_e( 'Help Center', 'konx-affiliate-dashboard' ); ?></h2>
+					<p style="font-size:13px;color:#646970;margin:0 0 12px;"><?php esc_html_e( 'Setup guides, FAQ, shortcodes, and troubleshooting.', 'konx-affiliate-dashboard' ); ?></p>
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=konx-help' ) ); ?>" class="button button-small"><?php esc_html_e( 'Open Help', 'konx-affiliate-dashboard' ); ?></a>
+				</div>
+			</div>
 		</div>
 
 		<script>
