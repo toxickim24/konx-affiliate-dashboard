@@ -61,7 +61,9 @@ class Konx_Admin_Dashboard {
 				<?php foreach ( $stats as $stat ) : ?>
 					<div class="konx-stat-card">
 						<span class="konx-stat-value"><?php echo esc_html( $stat['value'] ); ?></span>
-						<span class="konx-stat-label"><?php echo esc_html( $stat['label'] ); ?></span>
+						<span class="konx-stat-label"><?php echo esc_html( $stat['label'] ); ?>
+							<?php if ( ! empty( $stat['tip'] ) ) { echo Konx_Tooltip_Helper::get( $stat['tip'] ); } // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+						</span>
 					</div>
 				<?php endforeach; ?>
 			</div>
@@ -149,31 +151,8 @@ class Konx_Admin_Dashboard {
 				</div>
 			</div>
 
-			<!-- Recent Activity Feed -->
-			<div class="konx-card" style="margin-top:20px;">
-				<h2><?php esc_html_e( 'Recent Activity', 'konx-affiliate-dashboard' ); ?></h2>
-				<?php
-				$activity = self::get_activity_feed();
-				if ( empty( $activity ) ) :
-				?>
-					<div class="konx-empty-state">
-						<span class="dashicons dashicons-clock"></span>
-						<p><?php esc_html_e( 'No recent activity. Events will appear here as affiliates register, earn commissions, and request withdrawals.', 'konx-affiliate-dashboard' ); ?></p>
-					</div>
-				<?php else : ?>
-					<div class="konx-activity-feed">
-						<?php foreach ( $activity as $event ) : ?>
-							<div class="konx-activity-item">
-								<span class="dashicons <?php echo esc_attr( $event['icon'] ); ?>" style="color:<?php echo esc_attr( $event['color'] ); ?>;"></span>
-								<div>
-									<span><?php echo esc_html( $event['text'] ); ?></span>
-									<small><?php echo esc_html( $event['time'] ); ?></small>
-								</div>
-							</div>
-						<?php endforeach; ?>
-					</div>
-				<?php endif; ?>
-			</div>
+			<!-- Utility cards removed — exports are in Reports page,
+			     System Status and Help Center accessible via menu -->
 		</div>
 
 		<script>
@@ -225,13 +204,13 @@ class Konx_Admin_Dashboard {
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		return array(
 			array( 'value' => (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$aff}" ), 'label' => __( 'Total Affiliates', 'konx-affiliate-dashboard' ) ),
-			array( 'value' => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$aff} WHERE status = %s", 'active' ) ), 'label' => __( 'Active', 'konx-affiliate-dashboard' ) ),
-			array( 'value' => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wd} WHERE status IN (%s,%s)", 'pending', 'approved' ) ), 'label' => __( 'Pending Withdrawals', 'konx-affiliate-dashboard' ) ),
-			array( 'value' => '$' . number_format( (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(commission_amount),0) FROM {$comm} WHERE status = %s AND commission_type = %s", 'approved', 'one_time' ) ), 2 ), 'label' => __( 'One-Time', 'konx-affiliate-dashboard' ) ),
-			array( 'value' => '$' . number_format( (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(commission_amount),0) FROM {$comm} WHERE status = %s AND commission_type = %s", 'approved', 'recurring' ) ), 2 ), 'label' => __( 'Recurring', 'konx-affiliate-dashboard' ) ),
-			array( 'value' => '$' . number_format( (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(bonus_amount),0) FROM {$mile} WHERE status = %s", 'approved' ) ), 2 ), 'label' => __( 'Bonuses', 'konx-affiliate-dashboard' ) ),
-			array( 'value' => '$' . number_format( (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(amount),0) FROM {$wd} WHERE status = %s", 'completed' ) ), 2 ), 'label' => __( 'Paid Out', 'konx-affiliate-dashboard' ) ),
-			array( 'value' => '$' . number_format( (float) $wpdb->get_var( "SELECT COALESCE(SUM(cached_balance),0) FROM {$aff}" ), 2 ), 'label' => __( 'Wallet Balance', 'konx-affiliate-dashboard' ) ),
+			array( 'value' => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$aff} WHERE status = %s", 'active' ) ), 'label' => __( 'Active Affiliates', 'konx-affiliate-dashboard' ), 'tip' => '' ),
+			array( 'value' => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wd} WHERE status IN (%s,%s)", 'pending', 'approved' ) ), 'label' => __( 'Pending Withdrawals', 'konx-affiliate-dashboard' ), 'tip' => 'pending_withdrawals' ),
+			array( 'value' => '$' . number_format( (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(commission_amount),0) FROM {$comm} WHERE status = %s AND commission_type = %s", 'approved', 'one_time' ) ), 2 ), 'label' => __( 'Pack Commissions', 'konx-affiliate-dashboard' ), 'tip' => 'pack_commissions' ),
+			array( 'value' => '$' . number_format( (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(commission_amount),0) FROM {$comm} WHERE status = %s AND commission_type = %s", 'approved', 'recurring' ) ), 2 ), 'label' => __( 'Subscription Commissions', 'konx-affiliate-dashboard' ), 'tip' => 'sub_commissions' ),
+			array( 'value' => '$' . number_format( (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(bonus_amount),0) FROM {$mile} WHERE status = %s", 'approved' ) ), 2 ), 'label' => __( 'Milestone Bonuses', 'konx-affiliate-dashboard' ), 'tip' => 'milestone_bonus' ),
+			array( 'value' => '$' . number_format( (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(amount),0) FROM {$wd} WHERE status = %s", 'completed' ) ), 2 ), 'label' => __( 'Total Paid to Affiliates', 'konx-affiliate-dashboard' ), 'tip' => '' ),
+			array( 'value' => '$' . number_format( (float) $wpdb->get_var( "SELECT COALESCE(SUM(cached_balance),0) FROM {$aff}" ), 2 ), 'label' => __( 'Unpaid Balances', 'konx-affiliate-dashboard' ), 'tip' => 'unpaid_balances' ),
 		);
 		// phpcs:enable
 	}
@@ -268,53 +247,5 @@ class Konx_Admin_Dashboard {
 			'commissions' => array( 'labels' => $labels, 'values' => $cv ),
 			'withdrawals' => array( 'labels' => $labels, 'values' => $wv ),
 		);
-	}
-
-	/**
-	 * Get a unified activity feed from audit log.
-	 *
-	 * @return array Array of { icon, color, text, time }.
-	 */
-	private static function get_activity_feed() {
-		global $wpdb;
-
-		$table = $wpdb->prefix . 'konx_audit_log';
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-		$rows = $wpdb->get_results(
-			"SELECT event_type, object_type, description, created_at FROM {$table} ORDER BY id DESC LIMIT 15"
-		);
-
-		if ( ! $rows ) {
-			return array();
-		}
-
-		$icons = array(
-			'affiliate_registered'  => array( 'dashicons-admin-users', '#2271b1' ),
-			'commission_created'    => array( 'dashicons-money-alt', '#00a32a' ),
-			'recurring_commission_created' => array( 'dashicons-update', '#00a32a' ),
-			'withdrawal_created'    => array( 'dashicons-migrate', '#dba617' ),
-			'withdrawal_completed'  => array( 'dashicons-yes-alt', '#00a32a' ),
-			'withdrawal_approved'   => array( 'dashicons-thumbs-up', '#2271b1' ),
-			'withdrawal_rejected'   => array( 'dashicons-dismiss', '#d63638' ),
-			'milestone_bonus_awarded' => array( 'dashicons-star-filled', '#dba617' ),
-			'affiliate_type_changed' => array( 'dashicons-admin-generic', '#646970' ),
-			'affiliate_status_changed' => array( 'dashicons-admin-generic', '#646970' ),
-			'admin_fee_paid'        => array( 'dashicons-money-alt', '#00a32a' ),
-			'refund_processed'      => array( 'dashicons-undo', '#d63638' ),
-		);
-
-		$feed = array();
-		foreach ( $rows as $row ) {
-			$def   = isset( $icons[ $row->event_type ] ) ? $icons[ $row->event_type ] : array( 'dashicons-info-outline', '#646970' );
-			$feed[] = array(
-				'icon'  => $def[0],
-				'color' => $def[1],
-				'text'  => $row->description,
-				'time'  => human_time_diff( strtotime( $row->created_at ), current_time( 'timestamp', true ) ) . ' ' . __( 'ago', 'konx-affiliate-dashboard' ),
-			);
-		}
-
-		return $feed;
 	}
 }

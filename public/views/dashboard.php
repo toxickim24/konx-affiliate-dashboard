@@ -110,7 +110,7 @@ $fee       = $data['fee_status'];
 		</div>
 		<div class="konx-stat">
 			<span class="konx-stat-value">$<?php echo esc_html( $balance['available_balance'] ); ?></span>
-			<span class="konx-stat-label"><?php esc_html_e( 'Available', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'available_balance' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
+			<span class="konx-stat-label"><?php esc_html_e( 'Available Balance', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'available_balance' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
 		</div>
 		<div class="konx-stat">
 			<span class="konx-stat-value">$<?php echo esc_html( $balance['total_withdrawals'] ); ?></span>
@@ -126,7 +126,7 @@ $fee       = $data['fee_status'];
 		</div>
 		<div class="konx-stat">
 			<span class="konx-stat-value">$<?php echo esc_html( $data['estimated_bonus'] ); ?></span>
-			<span class="konx-stat-label"><?php esc_html_e( 'Est. Next Bonus', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'milestone_bonus' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
+			<span class="konx-stat-label"><?php esc_html_e( 'Estimated Next Bonus', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'milestone_bonus' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
 		</div>
 	</div>
 
@@ -138,8 +138,9 @@ $fee       = $data['fee_status'];
 		</div>
 		<p class="konx-progress-text">
 			<strong><?php echo esc_html( $milestone['sales_in_block'] ); ?></strong> / <?php echo esc_html( Konx_Milestone_Bonus::BLOCK_SIZE ); ?>
-			<?php esc_html_e( 'sales toward milestone at', 'konx-affiliate-dashboard' ); ?> <strong><?php echo esc_html( $milestone['next_milestone_at'] ); ?></strong>
+			<?php esc_html_e( 'sales toward your next milestone bonus', 'konx-affiliate-dashboard' ); ?>
 		</p>
+		<p class="konx-muted"><?php esc_html_e( 'Every 100 sales, you earn a bonus equal to all commissions from that block of 100 sales!', 'konx-affiliate-dashboard' ); ?></p>
 		<?php if ( ! empty( $data['bonuses']['entries'] ) ) : ?>
 			<h4><?php esc_html_e( 'Bonus History', 'konx-affiliate-dashboard' ); ?></h4>
 			<div class="konx-table-wrap">
@@ -172,6 +173,7 @@ $fee       = $data['fee_status'];
 	<!-- Referral Tools -->
 	<div class="konx-section">
 		<h3><?php esc_html_e( 'Referral Tools', 'konx-affiliate-dashboard' ); ?></h3>
+		<p class="konx-muted" style="margin-bottom:14px;"><?php esc_html_e( 'Share your unique referral link. When someone clicks it and makes a purchase, you earn a commission automatically.', 'konx-affiliate-dashboard' ); ?></p>
 		<div class="konx-referral-tools">
 			<div class="konx-referral-box">
 				<label><?php esc_html_e( 'Referral Code', 'konx-affiliate-dashboard' ); ?></label>
@@ -190,6 +192,22 @@ $fee       = $data['fee_status'];
 						<?php esc_html_e( 'Copy', 'konx-affiliate-dashboard' ); ?>
 					</button>
 				</div>
+			</div>
+		</div>
+
+		<!-- Share & QR -->
+		<div style="margin-top:14px;">
+			<label style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--konx-text-light,#646970);font-weight:600;display:block;margin-bottom:8px;"><?php esc_html_e( 'Share Your Link', 'konx-affiliate-dashboard' ); ?></label>
+			<div style="display:flex;gap:8px;flex-wrap:wrap;">
+				<?php
+				$share_url   = urlencode( $data['referral_url'] );
+				$share_text  = urlencode( __( 'Check out KonX! Use my referral link:', 'konx-affiliate-dashboard' ) );
+				$share_email = rawurlencode( __( 'Join KonX', 'konx-affiliate-dashboard' ) );
+				?>
+				<a href="https://www.facebook.com/sharer/sharer.php?u=<?php echo $share_url; ?>" target="_blank" rel="noopener" class="konx-btn konx-btn-sm konx-btn-outline" title="Facebook"><?php esc_html_e( 'Facebook', 'konx-affiliate-dashboard' ); ?></a>
+				<a href="https://twitter.com/intent/tweet?text=<?php echo $share_text; ?>&url=<?php echo $share_url; ?>" target="_blank" rel="noopener" class="konx-btn konx-btn-sm konx-btn-outline" title="X"><?php esc_html_e( 'X / Twitter', 'konx-affiliate-dashboard' ); ?></a>
+				<a href="https://www.linkedin.com/sharing/share-offsite/?url=<?php echo $share_url; ?>" target="_blank" rel="noopener" class="konx-btn konx-btn-sm konx-btn-outline" title="LinkedIn"><?php esc_html_e( 'LinkedIn', 'konx-affiliate-dashboard' ); ?></a>
+				<a href="mailto:?subject=<?php echo $share_email; ?>&body=<?php echo $share_text; ?>%20<?php echo $share_url; ?>" class="konx-btn konx-btn-sm konx-btn-outline" title="Email"><?php esc_html_e( 'Email', 'konx-affiliate-dashboard' ); ?></a>
 			</div>
 		</div>
 	</div>
@@ -289,7 +307,8 @@ $fee       = $data['fee_status'];
 						<textarea id="konx-wd-notes" name="notes" rows="2"></textarea>
 					</div>
 
-					<button type="submit" class="konx-btn konx-btn-primary"><?php esc_html_e( 'Submit Withdrawal Request', 'konx-affiliate-dashboard' ); ?></button>
+					<button type="submit" class="konx-btn konx-btn-primary" onclick="return confirm('<?php echo esc_js( sprintf( __( 'Submit withdrawal request for the entered amount? This cannot be undone.', 'konx-affiliate-dashboard' ) ) ); ?>');"><?php esc_html_e( 'Submit Withdrawal Request', 'konx-affiliate-dashboard' ); ?></button>
+					<p class="konx-muted" style="margin-top:10px;"><?php esc_html_e( 'Withdrawals are typically processed within 3-5 business days via Wise.', 'konx-affiliate-dashboard' ); ?></p>
 				</form>
 			<?php endif; ?>
 
@@ -325,6 +344,7 @@ $fee       = $data['fee_status'];
 	<?php if ( $fee['unpaid_count'] > 0 || $fee['overdue_count'] > 0 ) : ?>
 		<div class="konx-section">
 			<h3><?php esc_html_e( 'Admin Fee Status', 'konx-affiliate-dashboard' ); ?></h3>
+			<p class="konx-muted" style="margin-bottom:12px;"><?php esc_html_e( 'Admin fees are monthly program maintenance fees. Your commission earnings are paused until all fees are paid. Contact the administrator to make a payment.', 'konx-affiliate-dashboard' ); ?></p>
 			<div class="konx-stats-grid" style="grid-template-columns: repeat(3, 1fr);">
 				<div class="konx-stat">
 					<span class="konx-stat-value"><?php echo esc_html( $fee['unpaid_count'] ); ?></span>
@@ -342,6 +362,60 @@ $fee       = $data['fee_status'];
 			<p class="konx-muted"><?php esc_html_e( 'Please contact the administrator to resolve outstanding fees.', 'konx-affiliate-dashboard' ); ?></p>
 		</div>
 	<?php endif; ?>
+
+	<!-- Commission Rate Card -->
+	<div class="konx-section">
+		<h3><?php esc_html_e( 'Your Commission Rates', 'konx-affiliate-dashboard' ); ?></h3>
+		<p class="konx-muted" style="margin-bottom:12px;"><?php esc_html_e( 'These are the rates you earn based on your affiliate type.', 'konx-affiliate-dashboard' ); ?></p>
+		<?php
+		global $wpdb;
+		$rules_table = $wpdb->prefix . 'konx_commission_rules';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$my_rules = $wpdb->get_results( $wpdb->prepare(
+			"SELECT product_type, commission_type, rate FROM {$rules_table} WHERE affiliate_type = %s AND is_active = 1 ORDER BY commission_type, product_type",
+			$aff->affiliate_type
+		) );
+		?>
+		<?php if ( ! empty( $my_rules ) ) : ?>
+			<div class="konx-table-wrap">
+				<table class="konx-table">
+					<thead>
+						<tr>
+							<th scope="col"><?php esc_html_e( 'Product', 'konx-affiliate-dashboard' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Type', 'konx-affiliate-dashboard' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Your Rate', 'konx-affiliate-dashboard' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $my_rules as $rule ) : ?>
+							<tr>
+								<td><?php echo esc_html( ucwords( str_replace( '_', ' ', $rule->product_type ) ) ); ?></td>
+								<td><?php echo esc_html( 'recurring' === $rule->commission_type ? __( 'Recurring', 'konx-affiliate-dashboard' ) : __( 'One-Time', 'konx-affiliate-dashboard' ) ); ?></td>
+								<td><strong><?php echo esc_html( number_format( (float) $rule->rate * 100, 0 ) ); ?>%</strong></td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			</div>
+		<?php endif; ?>
+	</div>
+
+	<!-- Profile Settings -->
+	<div class="konx-section">
+		<h3><?php esc_html_e( 'Profile Settings', 'konx-affiliate-dashboard' ); ?></h3>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="konx_update_profile">
+			<?php wp_nonce_field( 'konx_update_profile_' . $aff->id, 'konx_profile_nonce' ); ?>
+
+			<div class="konx-form-row">
+				<label for="konx-profile-email"><?php esc_html_e( 'Wise Payment Email', 'konx-affiliate-dashboard' ); ?></label>
+				<input type="email" id="konx-profile-email" name="payment_email" value="<?php echo esc_attr( $aff->payment_email ); ?>" style="max-width:400px;">
+				<small><?php esc_html_e( 'This is the email address where your Wise payouts will be sent.', 'konx-affiliate-dashboard' ); ?></small>
+			</div>
+
+			<button type="submit" class="konx-btn konx-btn-primary"><?php esc_html_e( 'Save Profile', 'konx-affiliate-dashboard' ); ?></button>
+		</form>
+	</div>
 
 </div>
 

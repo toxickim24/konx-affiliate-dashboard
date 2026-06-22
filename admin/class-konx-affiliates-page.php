@@ -24,6 +24,8 @@ class Konx_Affiliates_Page {
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
 		add_action( 'admin_post_konx_update_affiliate', array( __CLASS__, 'handle_update' ) );
+		add_action( 'admin_post_konx_create_affiliate', array( __CLASS__, 'handle_create' ) );
+		add_action( 'admin_post_konx_adjust_balance', array( __CLASS__, 'handle_balance_adjustment' ) );
 	}
 
 	/**
@@ -115,6 +117,34 @@ class Konx_Affiliates_Page {
 					<p><?php echo esc_html( $feedback['message'] ); ?></p>
 				</div>
 			<?php endif; ?>
+
+			<!-- Create Affiliate -->
+			<div class="konx-card" style="margin-bottom:20px;">
+				<h2><?php esc_html_e( 'Create Affiliate', 'konx-affiliate-dashboard' ); ?></h2>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">
+					<input type="hidden" name="action" value="konx_create_affiliate">
+					<?php wp_nonce_field( 'konx_create_affiliate', 'konx_create_nonce' ); ?>
+					<div>
+						<label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;"><?php esc_html_e( 'WordPress User', 'konx-affiliate-dashboard' ); ?></label>
+						<?php wp_dropdown_users( array( 'name' => 'user_id', 'show_option_none' => __( '— Select User —', 'konx-affiliate-dashboard' ), 'option_none_value' => '' ) ); ?>
+					</div>
+					<div>
+						<label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;"><?php esc_html_e( 'Type', 'konx-affiliate-dashboard' ); ?></label>
+						<select name="affiliate_type">
+							<?php foreach ( $types as $val => $label ) : ?>
+								<?php if ( '' !== $val ) : ?>
+									<option value="<?php echo esc_attr( $val ); ?>"><?php echo esc_html( $label ); ?></option>
+								<?php endif; ?>
+							<?php endforeach; ?>
+						</select>
+					</div>
+					<div>
+						<label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;"><?php esc_html_e( 'Wise Email', 'konx-affiliate-dashboard' ); ?></label>
+						<input type="email" name="payment_email" placeholder="<?php esc_attr_e( 'optional', 'konx-affiliate-dashboard' ); ?>" style="width:200px;">
+					</div>
+					<button type="submit" class="button button-primary"><?php esc_html_e( 'Create', 'konx-affiliate-dashboard' ); ?></button>
+				</form>
+			</div>
 
 			<!-- Filters -->
 			<form method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>">
@@ -350,6 +380,32 @@ class Konx_Affiliates_Page {
 					<span class="konx-stat-value"><?php echo $fee_status['can_earn'] ? '<span style="color:var(--konx-success);">OK</span>' : '<span style="color:var(--konx-danger);">$' . esc_html( $fee_status['total_outstanding'] ) . '</span>'; ?></span>
 					<span class="konx-stat-label"><?php esc_html_e( 'Admin Fees', 'konx-affiliate-dashboard' ); ?></span>
 				</div>
+			</div>
+
+			<!-- Manual Balance Adjustment -->
+			<div class="konx-card" style="margin-bottom:20px;">
+				<h2><?php esc_html_e( 'Manual Balance Adjustment', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'balance_adjustment' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></h2>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">
+					<input type="hidden" name="action" value="konx_adjust_balance">
+					<input type="hidden" name="affiliate_id" value="<?php echo esc_attr( $aff->id ); ?>">
+					<?php wp_nonce_field( 'konx_adjust_balance_' . $aff->id, 'konx_adj_nonce' ); ?>
+					<div>
+						<label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;"><?php esc_html_e( 'Type', 'konx-affiliate-dashboard' ); ?></label>
+						<select name="adj_type">
+							<option value="credit"><?php esc_html_e( 'Credit (+)', 'konx-affiliate-dashboard' ); ?></option>
+							<option value="debit"><?php esc_html_e( 'Debit (−)', 'konx-affiliate-dashboard' ); ?></option>
+						</select>
+					</div>
+					<div>
+						<label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;"><?php esc_html_e( 'Amount ($)', 'konx-affiliate-dashboard' ); ?></label>
+						<input type="number" name="adj_amount" step="0.01" min="0.01" required style="width:100px;">
+					</div>
+					<div>
+						<label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;"><?php esc_html_e( 'Reason', 'konx-affiliate-dashboard' ); ?></label>
+						<input type="text" name="adj_reason" required style="width:250px;" placeholder="<?php esc_attr_e( 'e.g., Bonus for event promotion', 'konx-affiliate-dashboard' ); ?>">
+					</div>
+					<button type="submit" class="button" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to adjust this wallet balance?', 'konx-affiliate-dashboard' ) ); ?>');"><?php esc_html_e( 'Apply', 'konx-affiliate-dashboard' ); ?></button>
+				</form>
 			</div>
 
 			<div class="konx-grid-2">
@@ -615,5 +671,103 @@ class Konx_Affiliates_Page {
 			delete_transient( 'konx_aff_feedback' );
 		}
 		return $feedback;
+	}
+
+	// ------------------------------------------------------------------
+	// Create Affiliate Handler
+	// ------------------------------------------------------------------
+
+	/**
+	 * Handle manual affiliate creation from admin.
+	 */
+	public static function handle_create() {
+		if ( ! current_user_can( 'manage_konx_affiliates' ) ) {
+			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
+		}
+
+		check_admin_referer( 'konx_create_affiliate', 'konx_create_nonce' );
+
+		$user_id        = isset( $_POST['user_id'] ) ? absint( $_POST['user_id'] ) : 0;
+		$affiliate_type = isset( $_POST['affiliate_type'] ) ? sanitize_text_field( wp_unslash( $_POST['affiliate_type'] ) ) : 'referral';
+		$payment_email  = isset( $_POST['payment_email'] ) ? sanitize_email( wp_unslash( $_POST['payment_email'] ) ) : '';
+
+		if ( ! $user_id ) {
+			self::redirect_with_feedback( 'error', __( 'Please select a WordPress user.', 'konx-affiliate-dashboard' ) );
+			return;
+		}
+
+		$args = array();
+		if ( ! empty( $payment_email ) ) {
+			$args['payment_email'] = $payment_email;
+		}
+
+		$result = Konx_Affiliate_Manager::create_affiliate_profile( $user_id, $affiliate_type, $args );
+
+		if ( is_wp_error( $result ) ) {
+			self::redirect_with_feedback( 'error', $result->get_error_message() );
+		} else {
+			self::redirect_with_feedback( 'success', sprintf( __( 'Affiliate #%d created successfully.', 'konx-affiliate-dashboard' ), $result ) );
+		}
+	}
+
+	// ------------------------------------------------------------------
+	// Balance Adjustment Handler
+	// ------------------------------------------------------------------
+
+	/**
+	 * Handle manual wallet balance adjustment.
+	 */
+	public static function handle_balance_adjustment() {
+		if ( ! current_user_can( 'manage_konx_affiliates' ) ) {
+			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
+		}
+
+		$affiliate_id = isset( $_POST['affiliate_id'] ) ? absint( $_POST['affiliate_id'] ) : 0;
+		check_admin_referer( 'konx_adjust_balance_' . $affiliate_id, 'konx_adj_nonce' );
+
+		$adj_type   = isset( $_POST['adj_type'] ) ? sanitize_text_field( wp_unslash( $_POST['adj_type'] ) ) : '';
+		$adj_amount = isset( $_POST['adj_amount'] ) ? sanitize_text_field( wp_unslash( $_POST['adj_amount'] ) ) : '';
+		$adj_reason = isset( $_POST['adj_reason'] ) ? sanitize_text_field( wp_unslash( $_POST['adj_reason'] ) ) : '';
+
+		if ( ! $affiliate_id || ! $adj_amount || ! $adj_reason ) {
+			self::redirect_with_feedback( 'error', __( 'Amount and reason are required.', 'konx-affiliate-dashboard' ), $affiliate_id );
+			return;
+		}
+
+		$amount = number_format( (float) $adj_amount, 2, '.', '' );
+
+		if ( 'credit' === $adj_type ) {
+			$result = Konx_Wallet::credit(
+				$affiliate_id,
+				$amount,
+				Konx_Wallet::TYPE_ADJUSTMENT,
+				Konx_Wallet::REF_ADMIN,
+				0,
+				$adj_reason
+			);
+		} elseif ( 'debit' === $adj_type ) {
+			$result = Konx_Wallet::debit(
+				$affiliate_id,
+				$amount,
+				Konx_Wallet::TYPE_ADJUSTMENT,
+				Konx_Wallet::REF_ADMIN,
+				0,
+				$adj_reason,
+				true // Force — admin adjustments can go negative.
+			);
+		} else {
+			self::redirect_with_feedback( 'error', __( 'Invalid adjustment type.', 'konx-affiliate-dashboard' ), $affiliate_id );
+			return;
+		}
+
+		if ( is_wp_error( $result ) ) {
+			self::redirect_with_feedback( 'error', $result->get_error_message(), $affiliate_id );
+		} else {
+			self::redirect_with_feedback(
+				'success',
+				sprintf( __( 'Balance %s by $%s. Reason: %s', 'konx-affiliate-dashboard' ), $adj_type === 'credit' ? 'credited' : 'debited', $amount, $adj_reason ),
+				$affiliate_id
+			);
+		}
 	}
 }

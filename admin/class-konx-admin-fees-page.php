@@ -70,7 +70,7 @@ class Konx_Admin_Fees_Page {
 		?>
 		<div class="wrap">
 			<div class="konx-page-header">
-				<h1><?php esc_html_e( 'Admin Fees', 'konx-affiliate-dashboard' ); ?></h1>
+				<h1><?php esc_html_e( 'Admin Fees', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'admin_fee' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></h1>
 			</div>
 
 			<?php if ( $feedback ) : ?>
@@ -100,8 +100,19 @@ class Konx_Admin_Fees_Page {
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-bottom:20px;">
 				<input type="hidden" name="action" value="konx_create_fee">
 				<?php wp_nonce_field( 'konx_create_fee', 'konx_fee_nonce' ); ?>
-				<label><?php esc_html_e( 'Affiliate ID:', 'konx-affiliate-dashboard' ); ?>
-					<input type="number" name="affiliate_id" min="1" required style="width:80px;">
+				<label><?php esc_html_e( 'Affiliate:', 'konx-affiliate-dashboard' ); ?>
+					<select name="affiliate_id" required>
+						<option value=""><?php esc_html_e( '— Select Affiliate —', 'konx-affiliate-dashboard' ); ?></option>
+						<?php
+						global $wpdb;
+						$aff_list = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+							"SELECT a.id, u.display_name FROM {$wpdb->prefix}konx_affiliates a INNER JOIN {$wpdb->users} u ON a.user_id = u.ID ORDER BY u.display_name"
+						);
+						foreach ( $aff_list as $a ) {
+							printf( '<option value="%d">%s (#%d)</option>', esc_attr( $a->id ), esc_html( $a->display_name ), esc_html( $a->id ) );
+						}
+						?>
+					</select>
 				</label>
 				<label><?php esc_html_e( 'Period:', 'konx-affiliate-dashboard' ); ?>
 					<input type="text" name="fee_period" placeholder="2026-07" required style="width:100px;">
