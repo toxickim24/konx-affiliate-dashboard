@@ -64,19 +64,48 @@ $fee       = $data['fee_status'];
 		</div>
 	</div>
 
+	<!-- User Journey / Getting Started -->
+	<?php if ( ! empty( $data['journey'] ) && $data['journey']['percent'] < 100 ) : ?>
+		<?php $journey = $data['journey']; ?>
+		<div class="konx-section">
+			<h3><?php esc_html_e( 'Getting Started', 'konx-affiliate-dashboard' ); ?> — <?php echo esc_html( $journey['percent'] ); ?>% <?php esc_html_e( 'Complete', 'konx-affiliate-dashboard' ); ?></h3>
+			<div class="konx-progress-bar" role="progressbar" aria-valuenow="<?php echo esc_attr( $journey['percent'] ); ?>" aria-valuemin="0" aria-valuemax="100">
+				<div class="konx-progress-fill" style="width:<?php echo esc_attr( $journey['percent'] ); ?>%;"></div>
+			</div>
+			<div class="konx-journey-grid">
+				<?php foreach ( $journey['steps'] as $step ) : ?>
+					<div class="konx-journey-step <?php echo $step['done'] ? 'done' : ''; ?>">
+						<span class="konx-journey-check"><?php echo $step['done'] ? '&#10003;' : '&#9675;'; ?></span>
+						<div>
+							<strong><?php echo esc_html( $step['label'] ); ?></strong>
+							<?php if ( ! $step['done'] ) : ?>
+								<small><?php echo esc_html( $step['hint'] ); ?></small>
+							<?php endif; ?>
+						</div>
+					</div>
+				<?php endforeach; ?>
+			</div>
+			<?php if ( $journey['next_action'] ) : ?>
+				<p class="konx-muted" style="margin-top:12px;">
+					<?php printf( esc_html__( 'Next step: %s', 'konx-affiliate-dashboard' ), '<strong>' . esc_html( $journey['next_action']['hint'] ) . '</strong>' ); ?>
+				</p>
+			<?php endif; ?>
+		</div>
+	<?php endif; ?>
+
 	<!-- Performance Stats -->
 	<div class="konx-stats-grid">
 		<div class="konx-stat">
 			<span class="konx-stat-value">$<?php echo esc_html( $balance['lifetime_earnings'] ); ?></span>
-			<span class="konx-stat-label"><?php esc_html_e( 'Total Earnings', 'konx-affiliate-dashboard' ); ?></span>
+			<span class="konx-stat-label"><?php esc_html_e( 'Total Earnings', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'lifetime_earnings' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
 		</div>
 		<div class="konx-stat">
 			<span class="konx-stat-value">$<?php echo esc_html( $balance['available_balance'] ); ?></span>
-			<span class="konx-stat-label"><?php esc_html_e( 'Available', 'konx-affiliate-dashboard' ); ?></span>
+			<span class="konx-stat-label"><?php esc_html_e( 'Available', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'available_balance' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
 		</div>
 		<div class="konx-stat">
 			<span class="konx-stat-value">$<?php echo esc_html( $balance['total_withdrawals'] ); ?></span>
-			<span class="konx-stat-label"><?php esc_html_e( 'Withdrawn', 'konx-affiliate-dashboard' ); ?></span>
+			<span class="konx-stat-label"><?php esc_html_e( 'Withdrawn', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'total_withdrawn' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
 		</div>
 		<div class="konx-stat">
 			<span class="konx-stat-value"><?php echo esc_html( $milestone['completed_sales'] ); ?></span>
@@ -84,11 +113,11 @@ $fee       = $data['fee_status'];
 		</div>
 		<div class="konx-stat">
 			<span class="konx-stat-value"><?php echo esc_html( $milestone['milestones_achieved'] ); ?></span>
-			<span class="konx-stat-label"><?php esc_html_e( 'Milestones', 'konx-affiliate-dashboard' ); ?></span>
+			<span class="konx-stat-label"><?php esc_html_e( 'Milestones', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'milestone_bonus' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
 		</div>
 		<div class="konx-stat">
 			<span class="konx-stat-value">$<?php echo esc_html( $data['estimated_bonus'] ); ?></span>
-			<span class="konx-stat-label"><?php esc_html_e( 'Est. Next Bonus', 'konx-affiliate-dashboard' ); ?></span>
+			<span class="konx-stat-label"><?php esc_html_e( 'Est. Next Bonus', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'milestone_bonus' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
 		</div>
 	</div>
 

@@ -157,6 +157,48 @@
 	margin-bottom: 2px;
 }
 
+/* ================================================================
+ * User Journey
+ * ============================================================= */
+.konx-journey-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+	gap: 10px;
+	margin-top: 14px;
+}
+
+.konx-journey-step {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+	padding: 10px 12px;
+	background: var(--konx-bg, #f6f7f7);
+	border-radius: var(--konx-radius-sm, 4px);
+	font-size: 13px;
+}
+
+.konx-journey-step.done {
+	opacity: 0.65;
+}
+
+.konx-journey-check {
+	font-size: 16px;
+	line-height: 1;
+	flex-shrink: 0;
+	margin-top: 2px;
+}
+
+.konx-journey-step.done .konx-journey-check {
+	color: var(--konx-success, #00a32a);
+}
+
+.konx-journey-step small {
+	display: block;
+	font-size: 11px;
+	color: var(--konx-text-light, #646970);
+	margin-top: 2px;
+}
+
 .konx-stat-label {
 	display: block;
 	font-size: 11px;

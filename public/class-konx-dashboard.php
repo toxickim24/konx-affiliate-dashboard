@@ -201,6 +201,9 @@ class Konx_Dashboard {
 			delete_transient( 'konx_dash_feedback_' . $affiliate_id );
 		}
 
+		// User journey.
+		$journey = Konx_User_Journey::get_journey( $affiliate_id );
+
 		return array(
 			'affiliate'          => $affiliate,
 			'balance'            => $balance,
@@ -214,6 +217,7 @@ class Konx_Dashboard {
 			'min_withdrawal'     => $min_withdrawal,
 			'referral_url'       => $referral_url,
 			'feedback'           => $feedback,
+			'journey'            => $journey,
 		);
 	}
 
@@ -335,6 +339,21 @@ class Konx_Dashboard {
 			KONX_AFFILIATE_PLUGIN_URL . 'assets/css/konx-dashboard.css',
 			array( 'konx-frontend' ),
 			KONX_AFFILIATE_VERSION
+		);
+
+		wp_enqueue_style(
+			'konx-tooltips',
+			KONX_AFFILIATE_PLUGIN_URL . 'assets/css/konx-tooltips.css',
+			array(),
+			KONX_AFFILIATE_VERSION
+		);
+
+		wp_enqueue_script(
+			'konx-tooltips',
+			KONX_AFFILIATE_PLUGIN_URL . 'assets/js/konx-tooltips.js',
+			array(),
+			KONX_AFFILIATE_VERSION,
+			true
 		);
 	}
 

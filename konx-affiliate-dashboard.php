@@ -237,4 +237,19 @@ function konx_enqueue_admin_assets( $hook ) {
 		array(),
 		KONX_AFFILIATE_VERSION
 	);
+
+	wp_enqueue_style(
+		'konx-tooltips',
+		KONX_AFFILIATE_PLUGIN_URL . 'assets/css/konx-tooltips.css',
+		array(),
+		KONX_AFFILIATE_VERSION
+	);
+
+	wp_enqueue_script(
+		'konx-tooltips',
+		KONX_AFFILIATE_PLUGIN_URL . 'assets/js/konx-tooltips.js',
+		array(),
+		KONX_AFFILIATE_VERSION,
+		true
+	);
 }
