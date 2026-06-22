@@ -106,7 +106,7 @@ class Konx_Settings_Page {
 
 				<!-- Commission Rates -->
 				<div class="konx-form-card">
-					<h2><?php esc_html_e( 'Commission Rates (%)', 'konx-affiliate-dashboard' ); ?></h2>
+					<h2><?php esc_html_e( 'Commission Rates (%)', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'commission_rate' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></h2>
 					<p class="description"><?php esc_html_e( 'One-time commission rates for pack purchases. Enter as percentage (e.g., 40 for 40%).', 'konx-affiliate-dashboard' ); ?></p>
 					<div class="konx-table-wrap">
 						<table class="widefat fixed striped" style="max-width:700px;margin-top:12px;">

@@ -192,11 +192,32 @@
 	color: var(--konx-success, #00a32a);
 }
 
+.konx-journey-step.pending {
+	border-left: 3px solid var(--konx-border, #dcdcde);
+}
+
+.konx-journey-step.done {
+	border-left: 3px solid var(--konx-success, #00a32a);
+}
+
 .konx-journey-step small {
 	display: block;
 	font-size: 11px;
 	color: var(--konx-text-light, #646970);
 	margin-top: 2px;
+}
+
+.konx-journey-next {
+	margin-top: 14px;
+	padding: 12px 16px;
+	background: var(--konx-info-bg, #f0f6fc);
+	border-left: 4px solid var(--konx-info, #72aee6);
+	border-radius: var(--konx-radius-sm, 4px);
+	font-size: 13px;
+}
+
+.konx-journey-section h3 strong {
+	color: var(--konx-primary, #2271b1);
 }
 
 .konx-stat-label {
