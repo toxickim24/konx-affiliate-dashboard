@@ -202,6 +202,7 @@ function konx_affiliate_init() {
 	// Initialize admin pages.
 	if ( is_admin() ) {
 		Konx_Admin_Dashboard::init();
+		Konx_Affiliates_Page::init();
 		Konx_Admin_Product_Mapping::init();
 		Konx_Admin_Fees_Page::init();
 		Konx_Withdrawals_Page::init();
