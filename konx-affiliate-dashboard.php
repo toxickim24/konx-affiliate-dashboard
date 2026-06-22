@@ -190,9 +190,10 @@ function konx_affiliate_init() {
 	// Frontend affiliate dashboard shortcode.
 	Konx_Dashboard::init();
 
-	// Commission engines.
+	// Commission engines and refund handling.
 	Konx_Commission_Engine::init();
 	Konx_Recurring_Commission_Engine::init();
+	Konx_Refunds::init();
 
 	// Admin fee cron handler.
 	Konx_Admin_Fees::init();
