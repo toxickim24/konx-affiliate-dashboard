@@ -198,6 +198,7 @@ function konx_affiliate_init() {
 	if ( is_admin() ) {
 		Konx_Admin_Product_Mapping::init();
 		Konx_Admin_Fees_Page::init();
+		Konx_Withdrawals_Page::init();
 	}
 }
 add_action( 'plugins_loaded', 'konx_affiliate_init' );
