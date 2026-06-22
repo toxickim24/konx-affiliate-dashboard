@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Konx_Activity_Log_Page {
 
 	public static function init() {
-		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
+		// Menu registered by Konx_Tools_Page.
 	}
 
 	public static function register_menu() {
@@ -34,7 +34,13 @@ class Konx_Activity_Log_Page {
 		if ( ! current_user_can( 'manage_konx_settings' ) ) {
 			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
 		}
+		echo '<div class="wrap"><h1>' . esc_html__( 'Activity Log', 'konx-affiliate-dashboard' ) . '</h1>';
+		self::render_content();
+		echo '</div>';
+	}
 
+	/** Render inner content (used by Tools page). */
+	public static function render_content() {
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended
 		$event_filter = isset( $_GET['event'] ) ? sanitize_text_field( wp_unslash( $_GET['event'] ) ) : '';
 		$search       = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
@@ -55,9 +61,7 @@ class Konx_Activity_Log_Page {
 		);
 
 		?>
-		<div class="wrap">
-			<div class="konx-page-header">
-				<h1><?php esc_html_e( 'Activity Log', 'konx-affiliate-dashboard' ); ?></h1>
+			<div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
 				<a href="<?php echo esc_url( Konx_Export_Manager::get_export_url( 'affiliates' ) ); ?>" class="button"><?php esc_html_e( 'Export CSV', 'konx-affiliate-dashboard' ); ?></a>
 			</div>
 

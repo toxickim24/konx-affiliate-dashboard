@@ -16,7 +16,7 @@ class Konx_Notification_Center {
 
 	public static function init() {
 		add_action( 'admin_bar_menu', array( __CLASS__, 'add_admin_bar_node' ), 100 );
-		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
+		// Menu registered by Konx_Tools_Page.
 	}
 
 	public static function register_menu() {
@@ -66,15 +66,16 @@ class Konx_Notification_Center {
 		if ( ! current_user_can( 'manage_konx_settings' ) ) {
 			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
 		}
+		echo '<div class="wrap"><h1>' . esc_html__( 'Notifications', 'konx-affiliate-dashboard' ) . '</h1>';
+		self::render_content();
+		echo '</div>';
+	}
 
+	/** Render inner content (used by Tools page). */
+	public static function render_content() {
 		$notifications = self::get_notifications();
 
 		?>
-		<div class="wrap">
-			<div class="konx-page-header">
-				<h1><?php esc_html_e( 'Notifications', 'konx-affiliate-dashboard' ); ?></h1>
-			</div>
-
 			<?php if ( empty( $notifications ) ) : ?>
 				<div class="konx-empty-state">
 					<span class="dashicons dashicons-yes-alt" style="color:#00a32a;"></span>
@@ -96,7 +97,6 @@ class Konx_Notification_Center {
 					<?php endforeach; ?>
 				</div>
 			<?php endif; ?>
-		</div>
 		<?php
 	}
 

@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Konx_System_Status {
 
 	public static function init() {
-		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
+		// Menu registered by Konx_Tools_Page.
 	}
 
 	public static function register_menu() {
@@ -30,13 +30,16 @@ class Konx_System_Status {
 		if ( ! current_user_can( 'manage_konx_settings' ) ) {
 			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
 		}
+		echo '<div class="wrap"><h1>' . esc_html__( 'System Status', 'konx-affiliate-dashboard' ) . '</h1>';
+		self::render_content();
+		echo '</div>';
+	}
 
+	/** Render inner content (used by Tools page). */
+	public static function render_content() {
 		$checks = self::run_checks();
 
 		?>
-		<div class="wrap">
-			<h1><?php esc_html_e( 'System Status', 'konx-affiliate-dashboard' ); ?></h1>
-
 			<table class="widefat fixed striped" style="max-width:800px;margin-top:20px;">
 				<thead>
 					<tr>
@@ -55,7 +58,6 @@ class Konx_System_Status {
 					<?php endforeach; ?>
 				</tbody>
 			</table>
-		</div>
 		<?php
 	}
 

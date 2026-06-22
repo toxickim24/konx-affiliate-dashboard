@@ -205,20 +205,23 @@ function konx_affiliate_init() {
 	// Initialize admin pages.
 	if ( is_admin() ) {
 		add_action( 'admin_enqueue_scripts', 'konx_enqueue_admin_assets' );
+
+		// Main menu pages.
 		Konx_Admin_Dashboard::init();
 		Konx_Affiliates_Page::init();
-		Konx_Admin_Product_Mapping::init();
 		Konx_Admin_Fees_Page::init();
 		Konx_Withdrawals_Page::init();
 		Konx_Reports_Page::init();
 		Konx_Settings_Page::init();
-		Konx_Help_Center::init();
-		Konx_System_Status::init();
-		Konx_Export_Manager::init();
-		Konx_Activity_Log_Page::init();
+		Konx_Admin_Product_Mapping::init();
+
+		// Tools page (tabs: notifications, activity log, financial audit, system status, help).
+		Konx_Tools_Page::init();
 		Konx_Notification_Center::init();
+
+		// Utilities (no menu, handlers only).
+		Konx_Export_Manager::init();
 		Konx_Setup_Wizard::init();
-		Konx_Financial_Audit::init();
 	}
 }
 add_action( 'plugins_loaded', 'konx_affiliate_init' );
