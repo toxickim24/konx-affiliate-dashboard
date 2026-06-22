@@ -205,6 +205,9 @@ class Konx_Commission_Engine {
 		// Credit wallet only if approved (not blocked).
 		if ( self::STATUS_APPROVED === $status ) {
 			self::credit_wallet( $affiliate, $commission_id, $commission_data );
+
+			// Check for 100-sale milestone bonus.
+			Konx_Milestone_Bonus::maybe_award_bonus( (int) $affiliate->id );
 		}
 
 		return true;
