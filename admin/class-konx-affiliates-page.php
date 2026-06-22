@@ -106,7 +106,9 @@ class Konx_Affiliates_Page {
 
 		?>
 		<div class="wrap">
-			<h1><?php esc_html_e( 'Affiliates', 'konx-affiliate-dashboard' ); ?></h1>
+			<div class="konx-page-header">
+				<h1><?php esc_html_e( 'Affiliates', 'konx-affiliate-dashboard' ); ?></h1>
+			</div>
 
 			<?php if ( $feedback ) : ?>
 				<div class="notice notice-<?php echo esc_attr( $feedback['type'] ); ?> is-dismissible">
@@ -117,7 +119,7 @@ class Konx_Affiliates_Page {
 			<!-- Filters -->
 			<form method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>">
 				<input type="hidden" name="page" value="konx-affiliates">
-				<div class="tablenav top">
+				<div class="konx-filters">
 					<select name="type">
 						<?php foreach ( $types as $val => $label ) : ?>
 							<option value="<?php echo esc_attr( $val ); ?>" <?php selected( $type_filter, $val ); ?>><?php echo esc_html( $label ); ?></option>
@@ -128,13 +130,16 @@ class Konx_Affiliates_Page {
 							<option value="<?php echo esc_attr( $val ); ?>" <?php selected( $status_filter, $val ); ?>><?php echo esc_html( $label ); ?></option>
 						<?php endforeach; ?>
 					</select>
-					<input type="search" name="s" value="<?php echo esc_attr( $search ); ?>" placeholder="<?php esc_attr_e( 'Search...', 'konx-affiliate-dashboard' ); ?>">
+					<input type="search" name="s" value="<?php echo esc_attr( $search ); ?>" placeholder="<?php esc_attr_e( 'Search name, email, or code...', 'konx-affiliate-dashboard' ); ?>">
 					<?php submit_button( __( 'Filter', 'konx-affiliate-dashboard' ), 'secondary', '', false ); ?>
 				</div>
 			</form>
 
 			<?php if ( empty( $result['entries'] ) ) : ?>
-				<p><?php esc_html_e( 'No affiliates found.', 'konx-affiliate-dashboard' ); ?></p>
+				<div class="konx-empty-state">
+					<span class="dashicons dashicons-groups"></span>
+					<p><?php esc_html_e( 'No affiliates found. Affiliates appear here after registering.', 'konx-affiliate-dashboard' ); ?></p>
+				</div>
 			<?php else : ?>
 				<table class="widefat fixed striped">
 					<thead>
@@ -159,10 +164,7 @@ class Konx_Affiliates_Page {
 								<td><?php echo esc_html( $aff->user_email ); ?></td>
 								<td><?php echo esc_html( ucwords( str_replace( '_', ' ', $aff->affiliate_type ) ) ); ?></td>
 								<td>
-									<?php
-									$color = isset( $status_colors[ $aff->status ] ) ? $status_colors[ $aff->status ] : '#787c82';
-									printf( '<span style="color:%s;font-weight:600;">%s</span>', esc_attr( $color ), esc_html( ucfirst( $aff->status ) ) );
-									?>
+									<span class="konx-badge konx-badge-<?php echo esc_attr( $aff->status ); ?>"><?php echo esc_html( ucfirst( $aff->status ) ); ?></span>
 								</td>
 								<td><code><?php echo esc_html( $aff->referral_code ); ?></code></td>
 								<td><?php echo esc_html( $aff->completed_sales ); ?></td>
@@ -264,11 +266,11 @@ class Konx_Affiliates_Page {
 				</div>
 			<?php endif; ?>
 
-			<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px;">
+			<div class="konx-grid-2" style="margin-top:20px;">
 
 				<!-- Profile Info -->
-				<div style="background:#fff;border:1px solid #c3c4c7;border-radius:4px;padding:16px;">
-					<h2 style="margin-top:0;"><?php esc_html_e( 'Profile', 'konx-affiliate-dashboard' ); ?></h2>
+				<div class="konx-card">
+					<h2><?php esc_html_e( 'Profile', 'konx-affiliate-dashboard' ); ?></h2>
 					<table class="form-table">
 						<tr><th><?php esc_html_e( 'Affiliate ID', 'konx-affiliate-dashboard' ); ?></th><td><?php echo esc_html( $aff->id ); ?></td></tr>
 						<tr><th><?php esc_html_e( 'WordPress User', 'konx-affiliate-dashboard' ); ?></th><td><?php echo $user ? esc_html( $user->display_name . ' (' . $user->user_email . ')' ) : '—'; ?></td></tr>
@@ -283,8 +285,8 @@ class Konx_Affiliates_Page {
 				</div>
 
 				<!-- Edit Type & Status -->
-				<div style="background:#fff;border:1px solid #c3c4c7;border-radius:4px;padding:16px;">
-					<h2 style="margin-top:0;"><?php esc_html_e( 'Manage', 'konx-affiliate-dashboard' ); ?></h2>
+				<div class="konx-card">
+					<h2><?php esc_html_e( 'Manage', 'konx-affiliate-dashboard' ); ?></h2>
 					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 						<input type="hidden" name="action" value="konx_update_affiliate">
 						<input type="hidden" name="affiliate_id" value="<?php echo esc_attr( $aff->id ); ?>">
@@ -323,36 +325,36 @@ class Konx_Affiliates_Page {
 			</div>
 
 			<!-- Stats Row -->
-			<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin:20px 0;">
-				<div style="background:#fff;border:1px solid #c3c4c7;border-radius:4px;padding:12px;text-align:center;">
-					<div style="font-size:22px;font-weight:700;"><?php echo esc_html( $aff->completed_sales ); ?></div>
-					<div style="font-size:12px;color:#646970;"><?php esc_html_e( 'Total Sales', 'konx-affiliate-dashboard' ); ?></div>
+			<div class="konx-stats-grid">
+				<div class="konx-stat-card">
+					<span class="konx-stat-value"><?php echo esc_html( $aff->completed_sales ); ?></span>
+					<span class="konx-stat-label"><?php esc_html_e( 'Total Sales', 'konx-affiliate-dashboard' ); ?></span>
 				</div>
-				<div style="background:#fff;border:1px solid #c3c4c7;border-radius:4px;padding:12px;text-align:center;">
-					<div style="font-size:22px;font-weight:700;">$<?php echo esc_html( $balance['lifetime_earnings'] ); ?></div>
-					<div style="font-size:12px;color:#646970;"><?php esc_html_e( 'Lifetime Earnings', 'konx-affiliate-dashboard' ); ?></div>
+				<div class="konx-stat-card">
+					<span class="konx-stat-value">$<?php echo esc_html( $balance['lifetime_earnings'] ); ?></span>
+					<span class="konx-stat-label"><?php esc_html_e( 'Lifetime Earnings', 'konx-affiliate-dashboard' ); ?></span>
 				</div>
-				<div style="background:#fff;border:1px solid #c3c4c7;border-radius:4px;padding:12px;text-align:center;">
-					<div style="font-size:22px;font-weight:700;">$<?php echo esc_html( $balance['available_balance'] ); ?></div>
-					<div style="font-size:12px;color:#646970;"><?php esc_html_e( 'Balance', 'konx-affiliate-dashboard' ); ?></div>
+				<div class="konx-stat-card">
+					<span class="konx-stat-value">$<?php echo esc_html( $balance['available_balance'] ); ?></span>
+					<span class="konx-stat-label"><?php esc_html_e( 'Balance', 'konx-affiliate-dashboard' ); ?></span>
 				</div>
-				<div style="background:#fff;border:1px solid #c3c4c7;border-radius:4px;padding:12px;text-align:center;">
-					<div style="font-size:22px;font-weight:700;">$<?php echo esc_html( $balance['total_withdrawals'] ); ?></div>
-					<div style="font-size:12px;color:#646970;"><?php esc_html_e( 'Withdrawn', 'konx-affiliate-dashboard' ); ?></div>
+				<div class="konx-stat-card">
+					<span class="konx-stat-value">$<?php echo esc_html( $balance['total_withdrawals'] ); ?></span>
+					<span class="konx-stat-label"><?php esc_html_e( 'Withdrawn', 'konx-affiliate-dashboard' ); ?></span>
 				</div>
-				<div style="background:#fff;border:1px solid #c3c4c7;border-radius:4px;padding:12px;text-align:center;">
-					<div style="font-size:22px;font-weight:700;"><?php echo esc_html( $milestone['milestones_achieved'] ); ?></div>
-					<div style="font-size:12px;color:#646970;"><?php esc_html_e( 'Milestones', 'konx-affiliate-dashboard' ); ?></div>
+				<div class="konx-stat-card">
+					<span class="konx-stat-value"><?php echo esc_html( $milestone['milestones_achieved'] ); ?></span>
+					<span class="konx-stat-label"><?php esc_html_e( 'Milestones', 'konx-affiliate-dashboard' ); ?></span>
 				</div>
-				<div style="background:#fff;border:1px solid #c3c4c7;border-radius:4px;padding:12px;text-align:center;">
-					<div style="font-size:22px;font-weight:700;color:<?php echo $fee_status['can_earn'] ? '#00a32a' : '#d63638'; ?>;"><?php echo $fee_status['can_earn'] ? esc_html__( 'OK', 'konx-affiliate-dashboard' ) : '$' . esc_html( $fee_status['total_outstanding'] ); ?></div>
-					<div style="font-size:12px;color:#646970;"><?php esc_html_e( 'Admin Fees', 'konx-affiliate-dashboard' ); ?></div>
+				<div class="konx-stat-card">
+					<span class="konx-stat-value"><?php echo $fee_status['can_earn'] ? '<span style="color:var(--konx-success);">OK</span>' : '<span style="color:var(--konx-danger);">$' . esc_html( $fee_status['total_outstanding'] ) . '</span>'; ?></span>
+					<span class="konx-stat-label"><?php esc_html_e( 'Admin Fees', 'konx-affiliate-dashboard' ); ?></span>
 				</div>
 			</div>
 
-			<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+			<div class="konx-grid-2">
 				<!-- Recent Commissions -->
-				<div>
+				<div class="konx-card">
 					<h2><?php esc_html_e( 'Recent Commissions', 'konx-affiliate-dashboard' ); ?></h2>
 					<?php if ( empty( $commissions ) ) : ?>
 						<p><?php esc_html_e( 'No commissions.', 'konx-affiliate-dashboard' ); ?></p>
@@ -381,7 +383,7 @@ class Konx_Affiliates_Page {
 				</div>
 
 				<!-- Recent Withdrawals -->
-				<div>
+				<div class="konx-card">
 					<h2><?php esc_html_e( 'Recent Withdrawals', 'konx-affiliate-dashboard' ); ?></h2>
 					<?php if ( empty( $withdrawals['entries'] ) ) : ?>
 						<p><?php esc_html_e( 'No withdrawals.', 'konx-affiliate-dashboard' ); ?></p>

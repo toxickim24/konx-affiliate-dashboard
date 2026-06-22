@@ -324,9 +324,16 @@ class Konx_Dashboard {
 		}
 
 		wp_enqueue_style(
+			'konx-frontend',
+			KONX_AFFILIATE_PLUGIN_URL . 'assets/css/konx-frontend.css',
+			array(),
+			KONX_AFFILIATE_VERSION
+		);
+
+		wp_enqueue_style(
 			'konx-dashboard',
 			KONX_AFFILIATE_PLUGIN_URL . 'assets/css/konx-dashboard.css',
-			array(),
+			array( 'konx-frontend' ),
 			KONX_AFFILIATE_VERSION
 		);
 	}

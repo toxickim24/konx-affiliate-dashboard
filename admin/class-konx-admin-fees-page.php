@@ -69,7 +69,9 @@ class Konx_Admin_Fees_Page {
 
 		?>
 		<div class="wrap">
-			<h1><?php esc_html_e( 'Admin Fees', 'konx-affiliate-dashboard' ); ?></h1>
+			<div class="konx-page-header">
+				<h1><?php esc_html_e( 'Admin Fees', 'konx-affiliate-dashboard' ); ?></h1>
+			</div>
 
 			<?php if ( $feedback ) : ?>
 				<div class="notice notice-<?php echo esc_attr( $feedback['type'] ); ?> is-dismissible">
@@ -80,7 +82,7 @@ class Konx_Admin_Fees_Page {
 			<!-- Filters -->
 			<form method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>">
 				<input type="hidden" name="page" value="konx-admin-fees">
-				<div class="tablenav top">
+				<div class="konx-filters">
 					<select name="status">
 						<?php foreach ( $statuses as $val => $label ) : ?>
 							<option value="<?php echo esc_attr( $val ); ?>" <?php selected( $status_filter, $val ); ?>>
@@ -144,17 +146,7 @@ class Konx_Admin_Fees_Page {
 								<td>$<?php echo esc_html( $fee->fee_amount ); ?></td>
 								<td><?php echo esc_html( $fee->due_date ); ?></td>
 								<td>
-									<?php
-									$status_labels = array(
-										'unpaid'  => '<span style="color:#d63638;">Unpaid</span>',
-										'overdue' => '<span style="color:#d63638;font-weight:bold;">Overdue</span>',
-										'paid'    => '<span style="color:#00a32a;">Paid</span>',
-										'waived'  => '<span style="color:#72aee6;">Waived</span>',
-									);
-									echo isset( $status_labels[ $fee->status ] )
-										? wp_kses( $status_labels[ $fee->status ], array( 'span' => array( 'style' => array() ) ) )
-										: esc_html( $fee->status );
-									?>
+									<span class="konx-badge konx-badge-<?php echo esc_attr( $fee->status ); ?>"><?php echo esc_html( ucfirst( $fee->status ) ); ?></span>
 								</td>
 								<td><?php echo $fee->paid_date ? esc_html( $fee->paid_date ) : '—'; ?></td>
 								<td>

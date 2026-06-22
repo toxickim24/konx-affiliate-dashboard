@@ -1,0 +1,155 @@
+/**
+ * KonX Affiliate Dashboard — Frontend Design System
+ *
+ * Shared component styles for all public-facing pages.
+ * Scoped under .konx- prefix.
+ */
+
+/* ================================================================
+ * CSS Variables
+ * ============================================================= */
+:root {
+	--konx-primary: #2271b1;
+	--konx-primary-hover: #135e96;
+	--konx-primary-light: #f0f6fc;
+	--konx-success: #00a32a;
+	--konx-success-bg: #edfaef;
+	--konx-warning: #dba617;
+	--konx-warning-bg: #fcf6e3;
+	--konx-danger: #d63638;
+	--konx-danger-bg: #fcf0f1;
+	--konx-info: #72aee6;
+	--konx-info-bg: #f0f6fc;
+	--konx-muted: #787c82;
+	--konx-text: #1d2327;
+	--konx-text-light: #646970;
+	--konx-border: #dcdcde;
+	--konx-bg: #f6f7f7;
+	--konx-white: #fff;
+	--konx-radius: 8px;
+	--konx-radius-sm: 4px;
+	--konx-radius-full: 50px;
+	--konx-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+	--konx-shadow-hover: 0 2px 8px rgba(0, 0, 0, 0.1);
+	--konx-transition: 0.15s ease;
+}
+
+/* ================================================================
+ * Status Badges (Frontend)
+ * ============================================================= */
+.konx-badge {
+	display: inline-block;
+	padding: 3px 12px;
+	border-radius: var(--konx-radius-full);
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.5;
+	white-space: nowrap;
+	letter-spacing: 0.3px;
+}
+
+.konx-badge-active,
+.konx-badge-approved,
+.konx-badge-completed,
+.konx-badge-paid {
+	background: var(--konx-success-bg);
+	color: var(--konx-success);
+}
+
+.konx-badge-pending {
+	background: var(--konx-warning-bg);
+	color: #946800;
+}
+
+.konx-badge-blocked,
+.konx-badge-overdue,
+.konx-badge-suspended,
+.konx-badge-rejected {
+	background: var(--konx-danger-bg);
+	color: var(--konx-danger);
+}
+
+.konx-badge-cancelled,
+.konx-badge-inactive,
+.konx-badge-reversed {
+	background: #f0f0f1;
+	color: var(--konx-muted);
+}
+
+/* ================================================================
+ * Tabs
+ * ============================================================= */
+.konx-tabs {
+	display: flex;
+	border-bottom: 2px solid var(--konx-border);
+	margin-bottom: var(--konx-space-lg, 20px);
+	gap: 0;
+}
+
+.konx-tab {
+	padding: 10px 20px;
+	font-size: 14px;
+	font-weight: 500;
+	color: var(--konx-text-light);
+	cursor: pointer;
+	border: none;
+	background: none;
+	border-bottom: 2px solid transparent;
+	margin-bottom: -2px;
+	transition: color var(--konx-transition), border-color var(--konx-transition);
+}
+
+.konx-tab:hover {
+	color: var(--konx-text);
+}
+
+.konx-tab.active {
+	color: var(--konx-primary);
+	border-bottom-color: var(--konx-primary);
+	font-weight: 600;
+}
+
+.konx-tab-content {
+	display: none;
+}
+
+.konx-tab-content.active {
+	display: block;
+}
+
+/* ================================================================
+ * Accessibility
+ * ============================================================= */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+*:focus-visible {
+	outline: 2px solid var(--konx-primary);
+	outline-offset: 2px;
+}
+
+/* ================================================================
+ * Copy Feedback
+ * ============================================================= */
+.konx-copy-feedback {
+	display: inline-block;
+	font-size: 12px;
+	color: var(--konx-success);
+	font-weight: 600;
+	margin-left: 8px;
+	opacity: 0;
+	transition: opacity 0.3s;
+}
+
+.konx-copy-feedback.show {
+	opacity: 1;
+}

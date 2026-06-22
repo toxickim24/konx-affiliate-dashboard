@@ -305,9 +305,16 @@ class Konx_Registration {
 		}
 
 		wp_enqueue_style(
+			'konx-frontend',
+			KONX_AFFILIATE_PLUGIN_URL . 'assets/css/konx-frontend.css',
+			array(),
+			KONX_AFFILIATE_VERSION
+		);
+
+		wp_enqueue_style(
 			'konx-registration',
 			KONX_AFFILIATE_PLUGIN_URL . 'assets/css/konx-registration.css',
-			array(),
+			array( 'konx-frontend' ),
 			KONX_AFFILIATE_VERSION
 		);
 	}

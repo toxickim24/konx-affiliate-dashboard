@@ -56,9 +56,13 @@ class Konx_Admin_Product_Mapping {
 		$feedback   = self::get_feedback();
 
 		?>
+		<?php wp_enqueue_script( 'wc-enhanced-select' ); wp_enqueue_style( 'woocommerce_admin_styles' ); ?>
+
 		<div class="wrap">
-			<h1><?php esc_html_e( 'Product Mapping', 'konx-affiliate-dashboard' ); ?></h1>
-			<p><?php esc_html_e( 'Map WooCommerce products to commission categories. For variable products, map each variation ID separately.', 'konx-affiliate-dashboard' ); ?></p>
+			<div class="konx-page-header">
+				<h1><?php esc_html_e( 'Product Mapping', 'konx-affiliate-dashboard' ); ?></h1>
+			</div>
+			<p><?php esc_html_e( 'Map WooCommerce products to commission categories. Search products by name or enter an ID directly.', 'konx-affiliate-dashboard' ); ?></p>
 
 			<?php if ( $feedback ) : ?>
 				<div class="notice notice-<?php echo esc_attr( $feedback['type'] ); ?> is-dismissible">
@@ -66,23 +70,28 @@ class Konx_Admin_Product_Mapping {
 				</div>
 			<?php endif; ?>
 
-			<h2><?php esc_html_e( 'Add New Mapping', 'konx-affiliate-dashboard' ); ?></h2>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-				<input type="hidden" name="action" value="konx_save_product_mapping">
-				<?php wp_nonce_field( 'konx_save_product_mapping', 'konx_mapping_nonce' ); ?>
+			<div class="konx-form-card">
+				<h2><?php esc_html_e( 'Add New Mapping', 'konx-affiliate-dashboard' ); ?></h2>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<input type="hidden" name="action" value="konx_save_product_mapping">
+					<?php wp_nonce_field( 'konx_save_product_mapping', 'konx_mapping_nonce' ); ?>
 
-				<table class="form-table">
-					<tr>
-						<th scope="row">
-							<label for="konx_product_id"><?php esc_html_e( 'Product / Variation ID', 'konx-affiliate-dashboard' ); ?></label>
-						</th>
-						<td>
-							<input type="number" id="konx_product_id" name="product_id" min="1" class="regular-text" required>
-							<p class="description">
-								<?php esc_html_e( 'Enter the WooCommerce product ID. For variable products, enter the variation ID (not the parent).', 'konx-affiliate-dashboard' ); ?>
-							</p>
-						</td>
-					</tr>
+					<table class="form-table">
+						<tr>
+							<th scope="row">
+								<label for="konx_product_search"><?php esc_html_e( 'Product', 'konx-affiliate-dashboard' ); ?></label>
+							</th>
+							<td>
+								<select id="konx_product_search" class="wc-product-search" name="product_id"
+									data-placeholder="<?php esc_attr_e( 'Search for a product...', 'konx-affiliate-dashboard' ); ?>"
+									data-action="woocommerce_json_search_products_and_variations"
+									style="width:400px;" required>
+								</select>
+								<p class="description">
+									<?php esc_html_e( 'Search by product name. Supports variations.', 'konx-affiliate-dashboard' ); ?>
+								</p>
+							</td>
+						</tr>
 					<tr>
 						<th scope="row">
 							<label for="konx_product_type"><?php esc_html_e( 'Commission Category', 'konx-affiliate-dashboard' ); ?></label>
@@ -122,8 +131,7 @@ class Konx_Admin_Product_Mapping {
 
 				<?php submit_button( __( 'Save Mapping', 'konx-affiliate-dashboard' ) ); ?>
 			</form>
-
-			<hr>
+			</div><!-- .konx-form-card -->
 
 			<h2><?php esc_html_e( 'Current Mappings', 'konx-affiliate-dashboard' ); ?></h2>
 			<?php if ( empty( $mappings ) ) : ?>

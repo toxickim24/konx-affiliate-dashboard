@@ -1,154 +1,215 @@
 /**
  * KonX Affiliate Dashboard — Frontend Styles
  *
- * Designed to work cleanly inside Elementor pages and most
- * WordPress themes. Uses the .konx-dashboard wrapper to scope
- * all styles and avoid theme conflicts.
+ * Professional affiliate dashboard layout.
+ * Scoped under .konx-dashboard to avoid theme conflicts.
  */
 
-/* ----------------------------------------------------------------
+/* ================================================================
  * Layout
- * -------------------------------------------------------------- */
+ * ============================================================= */
 .konx-dashboard {
-	max-width: 900px;
+	max-width: 1100px;
 	margin: 0 auto;
 	font-size: 15px;
 	line-height: 1.6;
-	color: #1d2327;
+	color: var(--konx-text, #1d2327);
+	padding: 0 16px;
 }
 
+/* ================================================================
+ * Top Bar
+ * ============================================================= */
 .konx-topbar {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	margin-bottom: 16px;
-	padding: 10px 16px;
-	background: #f6f7f7;
-	border: 1px solid #dcdcde;
-	border-radius: 6px;
-	font-size: 14px;
+	margin-bottom: 20px;
+	padding: 12px 20px;
+	background: var(--konx-white, #fff);
+	border: 1px solid var(--konx-border, #dcdcde);
+	border-radius: var(--konx-radius, 8px);
+	box-shadow: var(--konx-shadow, 0 1px 4px rgba(0,0,0,0.06));
 }
 
-.konx-topbar-links {
+.konx-topbar-welcome {
+	font-size: 15px;
+	font-weight: 500;
+}
+
+/* ================================================================
+ * Hero Section
+ * ============================================================= */
+.konx-hero {
+	background: linear-gradient(135deg, #1e3a5f 0%, #2271b1 100%);
+	color: #fff;
+	border-radius: var(--konx-radius, 8px);
+	padding: 28px 32px;
+	margin-bottom: 20px;
 	display: flex;
-	gap: 8px;
+	justify-content: space-between;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 20px;
 }
 
+.konx-hero-info h2 {
+	margin: 0 0 4px;
+	font-size: 22px;
+	font-weight: 700;
+	color: #fff;
+}
+
+.konx-hero-meta {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+	font-size: 13px;
+	opacity: 0.85;
+}
+
+.konx-hero-balance {
+	text-align: right;
+}
+
+.konx-hero-balance-label {
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	opacity: 0.8;
+}
+
+.konx-hero-balance-value {
+	font-size: 36px;
+	font-weight: 700;
+	line-height: 1.1;
+}
+
+.konx-hero-actions {
+	display: flex;
+	gap: 10px;
+	margin-top: 12px;
+}
+
+.konx-hero-actions .konx-btn {
+	background: rgba(255,255,255,0.15);
+	color: #fff;
+	border: 1px solid rgba(255,255,255,0.3);
+}
+
+.konx-hero-actions .konx-btn:hover {
+	background: rgba(255,255,255,0.25);
+}
+
+/* ================================================================
+ * Sections
+ * ============================================================= */
 .konx-section {
-	background: #fff;
-	border: 1px solid #dcdcde;
-	border-radius: 6px;
+	background: var(--konx-white, #fff);
+	border: 1px solid var(--konx-border, #dcdcde);
+	border-radius: var(--konx-radius, 8px);
 	padding: 20px 24px;
 	margin-bottom: 20px;
+	box-shadow: var(--konx-shadow, 0 1px 4px rgba(0,0,0,0.06));
 }
 
 .konx-section h3 {
 	margin: 0 0 16px;
 	padding: 0 0 10px;
-	border-bottom: 1px solid #f0f0f1;
-	font-size: 17px;
+	border-bottom: 1px solid var(--konx-border, #dcdcde);
+	font-size: 16px;
 	font-weight: 600;
 }
 
 .konx-section h4 {
 	margin: 20px 0 10px;
-	font-size: 15px;
-	font-weight: 600;
-}
-
-/* ----------------------------------------------------------------
- * Notices
- * -------------------------------------------------------------- */
-.konx-notice,
-.konx-dash-notice {
-	padding: 12px 16px;
-	border-radius: 4px;
-	margin-bottom: 16px;
 	font-size: 14px;
-}
-
-.konx-notice-success {
-	background: #edfaef;
-	border: 1px solid #00a32a;
-	color: #00450b;
-}
-
-.konx-notice-error {
-	background: #fcf0f1;
-	border: 1px solid #d63638;
-	color: #8a1114;
-}
-
-.konx-notice-info {
-	background: #f0f6fc;
-	border: 1px solid #72aee6;
-	color: #1d4e89;
-}
-
-.konx-dash-notice {
-	background: #f0f6fc;
-	border: 1px solid #72aee6;
-	color: #1d4e89;
-	text-align: center;
-	padding: 24px;
-}
-
-.konx-dash-notice a {
 	font-weight: 600;
 }
 
-/* ----------------------------------------------------------------
+/* ================================================================
  * Stats Grid
- * -------------------------------------------------------------- */
+ * ============================================================= */
 .konx-stats-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-	gap: 16px;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 14px;
+	margin-bottom: 20px;
 }
 
 .konx-stat {
-	background: #f6f7f7;
-	border-radius: 6px;
+	background: var(--konx-bg, #f6f7f7);
+	border-radius: var(--konx-radius, 8px);
 	padding: 16px;
 	text-align: center;
+	transition: transform var(--konx-transition, 0.15s);
+}
+
+.konx-stat:hover {
+	transform: translateY(-2px);
 }
 
 .konx-stat-value {
 	display: block;
 	font-size: 24px;
 	font-weight: 700;
-	color: #1d2327;
-	margin-bottom: 4px;
+	color: var(--konx-text, #1d2327);
+	margin-bottom: 2px;
 }
 
 .konx-stat-label {
 	display: block;
-	font-size: 13px;
-	color: #646970;
+	font-size: 11px;
+	color: var(--konx-text-light, #646970);
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
 }
 
-/* ----------------------------------------------------------------
- * Progress Bar
- * -------------------------------------------------------------- */
-.konx-progress-wrap {
-	margin-bottom: 8px;
+/* ================================================================
+ * Notices
+ * ============================================================= */
+.konx-notice,
+.konx-dash-notice {
+	padding: 14px 18px;
+	border-radius: var(--konx-radius-sm, 4px);
+	margin-bottom: 16px;
+	font-size: 14px;
+	display: flex;
+	align-items: center;
+	gap: 10px;
 }
 
+.konx-notice-success { background: #edfaef; border-left: 4px solid #00a32a; color: #00450b; }
+.konx-notice-error   { background: #fcf0f1; border-left: 4px solid #d63638; color: #8a1114; }
+.konx-notice-info    { background: #f0f6fc; border-left: 4px solid #72aee6; color: #1d4e89; }
+
+.konx-dash-notice {
+	background: var(--konx-info-bg, #f0f6fc);
+	border: 1px solid var(--konx-info, #72aee6);
+	color: #1d4e89;
+	text-align: center;
+	padding: 28px;
+	justify-content: center;
+}
+
+.konx-dash-notice a { font-weight: 600; }
+
+/* ================================================================
+ * Progress Bar
+ * ============================================================= */
 .konx-progress-bar {
-	background: #dcdcde;
+	background: #e0e0e0;
 	border-radius: 10px;
-	height: 20px;
+	height: 18px;
 	overflow: hidden;
 	margin-bottom: 8px;
 }
 
 .konx-progress-fill {
-	background: #2271b1;
+	background: linear-gradient(90deg, #2271b1, #4fa3d1);
 	height: 100%;
 	border-radius: 10px;
-	transition: width 0.4s ease;
+	transition: width 0.5s ease;
 	min-width: 2px;
 }
 
@@ -159,139 +220,194 @@
 
 .konx-progress-meta {
 	font-size: 13px;
-	color: #646970;
+	color: var(--konx-text-light, #646970);
 	margin: 0;
 }
 
-/* ----------------------------------------------------------------
+/* ================================================================
  * Tables
- * -------------------------------------------------------------- */
+ * ============================================================= */
+.konx-table-wrap {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+	margin: 0 -4px;
+	padding: 0 4px;
+}
+
 .konx-table {
 	width: 100%;
 	border-collapse: collapse;
-	font-size: 14px;
+	font-size: 13px;
 }
 
 .konx-table th,
 .konx-table td {
-	padding: 8px 10px;
+	padding: 10px 12px;
 	text-align: left;
-	border-bottom: 1px solid #f0f0f1;
+	border-bottom: 1px solid var(--konx-border, #dcdcde);
 }
 
 .konx-table th {
 	font-weight: 600;
-	color: #1d2327;
-	background: #f6f7f7;
+	color: var(--konx-text, #1d2327);
+	background: var(--konx-bg, #f6f7f7);
 	white-space: nowrap;
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.3px;
 }
 
-.konx-table tbody tr:hover {
-	background: #f6f7f7;
-}
+.konx-table tbody tr:hover { background: #fafafa; }
+.konx-table tbody tr:focus-within { background: #fff3cd; }
 
+/* ================================================================
+ * Info Table (Key-Value)
+ * ============================================================= */
 .konx-info-table {
 	width: 100%;
 	border-collapse: collapse;
 }
 
 .konx-info-table td {
-	padding: 6px 0;
-	border-bottom: 1px solid #f0f0f1;
+	padding: 8px 0;
+	border-bottom: 1px solid var(--konx-border, #dcdcde);
+	font-size: 14px;
 }
 
 .konx-info-table td:first-child {
 	font-weight: 600;
-	width: 160px;
-	color: #646970;
+	width: 140px;
+	color: var(--konx-text-light, #646970);
+	font-size: 13px;
 }
 
-/* ----------------------------------------------------------------
- * Referral Input
- * -------------------------------------------------------------- */
-.konx-referral-input {
-	width: 320px;
-	max-width: 100%;
-	padding: 6px 10px;
-	border: 1px solid #8c8f94;
-	border-radius: 4px;
-	font-size: 14px;
-	background: #f6f7f7;
-	margin-right: 8px;
+/* ================================================================
+ * Referral Tools
+ * ============================================================= */
+.konx-referral-tools {
+	display: flex;
+	gap: 12px;
+	align-items: stretch;
+	flex-wrap: wrap;
 }
 
-/* ----------------------------------------------------------------
+.konx-referral-box {
+	flex: 1;
+	min-width: 200px;
+	background: var(--konx-bg, #f6f7f7);
+	border-radius: var(--konx-radius, 8px);
+	padding: 14px 16px;
+}
+
+.konx-referral-box label {
+	display: block;
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: var(--konx-text-light, #646970);
+	margin-bottom: 6px;
+	font-weight: 600;
+}
+
+.konx-referral-copy {
+	display: flex;
+	gap: 8px;
+}
+
+.konx-referral-copy input {
+	flex: 1;
+	padding: 8px 10px;
+	border: 1px solid var(--konx-border, #dcdcde);
+	border-radius: var(--konx-radius-sm, 4px);
+	font-size: 13px;
+	background: var(--konx-white, #fff);
+	font-family: monospace;
+}
+
+/* ================================================================
+ * Buttons
+ * ============================================================= */
+.konx-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 16px;
+	border: none;
+	border-radius: var(--konx-radius-sm, 4px);
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	text-decoration: none;
+	line-height: 1.4;
+	transition: all var(--konx-transition, 0.15s);
+	white-space: nowrap;
+}
+
+.konx-btn-primary {
+	background: var(--konx-primary, #2271b1);
+	color: #fff;
+}
+.konx-btn-primary:hover { background: var(--konx-primary-hover, #135e96); color: #fff; }
+
+.konx-btn-sm { padding: 5px 12px; font-size: 12px; }
+
+.konx-btn-outline {
+	background: transparent;
+	border: 1px solid var(--konx-border, #dcdcde);
+	color: var(--konx-text, #1d2327);
+}
+.konx-btn-outline:hover { border-color: var(--konx-primary, #2271b1); color: var(--konx-primary, #2271b1); }
+
+/* ================================================================
  * Forms
- * -------------------------------------------------------------- */
+ * ============================================================= */
 .konx-withdrawal-form {
 	max-width: 480px;
 }
 
 .konx-form-row {
-	margin-bottom: 14px;
+	margin-bottom: 16px;
 }
 
 .konx-form-row label {
 	display: block;
 	font-weight: 600;
-	margin-bottom: 4px;
-	font-size: 14px;
+	margin-bottom: 6px;
+	font-size: 13px;
+	color: var(--konx-text, #1d2327);
 }
 
 .konx-form-row input,
 .konx-form-row select,
 .konx-form-row textarea {
 	width: 100%;
-	padding: 8px 10px;
-	border: 1px solid #8c8f94;
-	border-radius: 4px;
+	padding: 10px 12px;
+	border: 1px solid var(--konx-border, #dcdcde);
+	border-radius: var(--konx-radius-sm, 4px);
 	font-size: 14px;
 	box-sizing: border-box;
+	transition: border-color var(--konx-transition, 0.15s), box-shadow var(--konx-transition, 0.15s);
+}
+
+.konx-form-row input:focus,
+.konx-form-row select:focus,
+.konx-form-row textarea:focus {
+	border-color: var(--konx-primary, #2271b1);
+	box-shadow: 0 0 0 2px rgba(34, 113, 177, 0.15);
+	outline: none;
 }
 
 .konx-form-row small {
 	display: block;
 	margin-top: 4px;
-	color: #646970;
+	color: var(--konx-text-light, #646970);
 	font-size: 12px;
 }
 
-/* ----------------------------------------------------------------
- * Buttons
- * -------------------------------------------------------------- */
-.konx-btn {
-	display: inline-block;
-	padding: 8px 16px;
-	border: none;
-	border-radius: 4px;
-	font-size: 14px;
-	font-weight: 600;
-	cursor: pointer;
-	text-decoration: none;
-	line-height: 1.4;
-}
-
-.konx-btn-primary {
-	background: #2271b1;
-	color: #fff;
-}
-
-.konx-btn-primary:hover {
-	background: #135e96;
-}
-
-.konx-btn-sm {
-	padding: 4px 10px;
-	font-size: 13px;
-}
-
-/* ----------------------------------------------------------------
+/* ================================================================
  * Utility
- * -------------------------------------------------------------- */
-.konx-muted {
-	color: #646970;
-	font-size: 13px;
-}
+ * ============================================================= */
+.konx-muted { color: var(--konx-text-light, #646970); font-size: 13px; }
 
 code {
 	background: #f0f0f1;
@@ -300,42 +416,27 @@ code {
 	font-size: 13px;
 }
 
-/* ----------------------------------------------------------------
+/* ================================================================
  * Responsive
- * -------------------------------------------------------------- */
-@media (max-width: 600px) {
-	.konx-dashboard {
-		font-size: 14px;
-	}
+ * ============================================================= */
+@media (max-width: 768px) {
+	.konx-dashboard { font-size: 14px; padding: 0 12px; }
+	.konx-section { padding: 16px; }
+	.konx-hero { padding: 20px; flex-direction: column; text-align: center; }
+	.konx-hero-balance { text-align: center; }
+	.konx-hero-balance-value { font-size: 28px; }
+	.konx-hero-meta { justify-content: center; }
+	.konx-hero-actions { justify-content: center; }
+	.konx-stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+	.konx-stat-value { font-size: 20px; }
+	.konx-referral-tools { flex-direction: column; }
+	.konx-table { font-size: 12px; }
+	.konx-table th, .konx-table td { padding: 8px 6px; }
+	.konx-info-table td:first-child { width: 110px; }
+}
 
-	.konx-section {
-		padding: 16px;
-	}
-
-	.konx-stats-grid {
-		grid-template-columns: repeat(2, 1fr);
-		gap: 10px;
-	}
-
-	.konx-stat-value {
-		font-size: 20px;
-	}
-
-	.konx-table {
-		font-size: 12px;
-	}
-
-	.konx-table th,
-	.konx-table td {
-		padding: 6px 4px;
-	}
-
-	.konx-info-table td:first-child {
-		width: 120px;
-	}
-
-	.konx-referral-input {
-		width: 100%;
-		margin-bottom: 8px;
-	}
+@media (max-width: 480px) {
+	.konx-stats-grid { grid-template-columns: 1fr; }
+	.konx-topbar { flex-direction: column; gap: 8px; text-align: center; }
+	.konx-hero h2 { font-size: 18px; }
 }

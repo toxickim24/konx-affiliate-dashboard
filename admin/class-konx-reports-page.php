@@ -55,26 +55,45 @@ class Konx_Reports_Page {
 
 		$reports = self::get_all_reports( $date_from, $date_to );
 
+		wp_enqueue_script( 'chart-js', 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js', array(), '4.4.4', true );
+
+		// Prepare chart data from reports.
+		$chart_product = self::prepare_chart_labels_values( $reports['by_product'], 'product_type', 'total_amount' );
+		$chart_type    = self::prepare_chart_labels_values( $reports['by_commission_type'], 'commission_type', 'total_amount' );
+
 		?>
 		<div class="wrap">
-			<h1><?php esc_html_e( 'Reports', 'konx-affiliate-dashboard' ); ?></h1>
+			<div class="konx-page-header">
+				<h1><?php esc_html_e( 'Reports', 'konx-affiliate-dashboard' ); ?></h1>
+			</div>
 
 			<!-- Date Range Filter -->
-			<form method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>" style="margin-bottom:20px;">
-				<input type="hidden" name="page" value="konx-reports">
-				<label><?php esc_html_e( 'From:', 'konx-affiliate-dashboard' ); ?>
-					<input type="date" name="from" value="<?php echo esc_attr( $date_from ); ?>">
-				</label>
-				<label style="margin-left:8px;"><?php esc_html_e( 'To:', 'konx-affiliate-dashboard' ); ?>
-					<input type="date" name="to" value="<?php echo esc_attr( $date_to ); ?>">
-				</label>
-				<?php submit_button( __( 'Filter', 'konx-affiliate-dashboard' ), 'secondary', '', false ); ?>
-			</form>
+			<div class="konx-filters">
+				<form method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+					<input type="hidden" name="page" value="konx-reports">
+					<label for="konx-from"><?php esc_html_e( 'From:', 'konx-affiliate-dashboard' ); ?></label>
+					<input type="date" id="konx-from" name="from" value="<?php echo esc_attr( $date_from ); ?>">
+					<label for="konx-to"><?php esc_html_e( 'To:', 'konx-affiliate-dashboard' ); ?></label>
+					<input type="date" id="konx-to" name="to" value="<?php echo esc_attr( $date_to ); ?>">
+					<?php submit_button( __( 'Filter', 'konx-affiliate-dashboard' ), 'secondary', '', false ); ?>
+				</form>
+			</div>
 
-			<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+			<!-- Visual Charts -->
+			<div class="konx-grid-2">
+				<div class="konx-chart-wrap">
+					<h3><?php esc_html_e( 'Sales by Product', 'konx-affiliate-dashboard' ); ?></h3>
+					<canvas id="konx-chart-products"></canvas>
+				</div>
+				<div class="konx-chart-wrap">
+					<h3><?php esc_html_e( 'One-Time vs Recurring', 'konx-affiliate-dashboard' ); ?></h3>
+					<canvas id="konx-chart-types"></canvas>
+				</div>
+			</div>
 
-				<!-- Sales by Product Category -->
-				<div>
+			<!-- Report Tables -->
+			<div class="konx-grid-2">
+				<div class="konx-card">
 					<h2><?php esc_html_e( 'Sales by Product Category', 'konx-affiliate-dashboard' ); ?></h2>
 					<?php self::render_table( $reports['by_product'], array(
 						'product_type' => __( 'Product', 'konx-affiliate-dashboard' ),
@@ -83,8 +102,7 @@ class Konx_Reports_Page {
 					), 'product_type', '$' ); ?>
 				</div>
 
-				<!-- Commissions by Affiliate Type -->
-				<div>
+				<div class="konx-card">
 					<h2><?php esc_html_e( 'Commissions by Affiliate Type', 'konx-affiliate-dashboard' ); ?></h2>
 					<?php self::render_table( $reports['by_affiliate_type'], array(
 						'affiliate_type' => __( 'Type', 'konx-affiliate-dashboard' ),
@@ -93,18 +111,7 @@ class Konx_Reports_Page {
 					), 'affiliate_type', '$' ); ?>
 				</div>
 
-				<!-- One-Time vs Recurring -->
-				<div>
-					<h2><?php esc_html_e( 'One-Time vs Recurring', 'konx-affiliate-dashboard' ); ?></h2>
-					<?php self::render_table( $reports['by_commission_type'], array(
-						'commission_type' => __( 'Type', 'konx-affiliate-dashboard' ),
-						'total_sales'     => __( 'Sales', 'konx-affiliate-dashboard' ),
-						'total_amount'    => __( 'Commission', 'konx-affiliate-dashboard' ),
-					), 'commission_type', '$' ); ?>
-				</div>
-
-				<!-- Milestone Bonuses -->
-				<div>
+				<div class="konx-card">
 					<h2><?php esc_html_e( 'Milestone Bonuses', 'konx-affiliate-dashboard' ); ?></h2>
 					<?php self::render_table( $reports['milestones'], array(
 						'status'       => __( 'Status', 'konx-affiliate-dashboard' ),
@@ -113,8 +120,7 @@ class Konx_Reports_Page {
 					), 'status', '$' ); ?>
 				</div>
 
-				<!-- Withdrawal Summary -->
-				<div>
+				<div class="konx-card">
 					<h2><?php esc_html_e( 'Withdrawals by Status', 'konx-affiliate-dashboard' ); ?></h2>
 					<?php self::render_table( $reports['withdrawals'], array(
 						'status'       => __( 'Status', 'konx-affiliate-dashboard' ),
@@ -123,8 +129,7 @@ class Konx_Reports_Page {
 					), 'status', '$' ); ?>
 				</div>
 
-				<!-- Admin Fee Summary -->
-				<div>
+				<div class="konx-card">
 					<h2><?php esc_html_e( 'Admin Fee Status', 'konx-affiliate-dashboard' ); ?></h2>
 					<?php self::render_table( $reports['admin_fees'], array(
 						'status'       => __( 'Status', 'konx-affiliate-dashboard' ),
@@ -132,20 +137,56 @@ class Konx_Reports_Page {
 						'total_amount' => __( 'Amount', 'konx-affiliate-dashboard' ),
 					), 'status', '$' ); ?>
 				</div>
+
+				<div class="konx-card">
+					<h2><?php esc_html_e( 'One-Time vs Recurring', 'konx-affiliate-dashboard' ); ?></h2>
+					<?php self::render_table( $reports['by_commission_type'], array(
+						'commission_type' => __( 'Type', 'konx-affiliate-dashboard' ),
+						'total_sales'     => __( 'Sales', 'konx-affiliate-dashboard' ),
+						'total_amount'    => __( 'Commission', 'konx-affiliate-dashboard' ),
+					), 'commission_type', '$' ); ?>
+				</div>
 			</div>
 
 			<!-- Top Affiliates -->
-			<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px;">
-				<div>
+			<div class="konx-grid-2">
+				<div class="konx-card">
 					<h2><?php esc_html_e( 'Top Affiliates by Sales', 'konx-affiliate-dashboard' ); ?></h2>
 					<?php self::render_leaderboard( $reports['top_by_sales'], 'total_sales' ); ?>
 				</div>
-				<div>
+				<div class="konx-card">
 					<h2><?php esc_html_e( 'Top Affiliates by Earnings', 'konx-affiliate-dashboard' ); ?></h2>
 					<?php self::render_leaderboard( $reports['top_by_earnings'], 'total_earnings', '$' ); ?>
 				</div>
 			</div>
 		</div>
+
+		<script>
+		document.addEventListener('DOMContentLoaded', function(){
+			if (typeof Chart === 'undefined') return;
+			var colors = ['#2271b1','#00a32a','#dba617','#d63638','#72aee6','#9b59b6','#e67e22'];
+
+			// Product bar chart
+			var pd = <?php echo wp_json_encode( $chart_product ); ?>;
+			if (pd.labels.length) {
+				new Chart(document.getElementById('konx-chart-products'), {
+					type: 'bar',
+					data: { labels: pd.labels, datasets: [{ data: pd.values, backgroundColor: colors.slice(0, pd.labels.length), borderRadius: 4 }] },
+					options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: function(v){ return '$'+v; } } } } }
+				});
+			}
+
+			// Commission type donut
+			var td = <?php echo wp_json_encode( $chart_type ); ?>;
+			if (td.labels.length) {
+				new Chart(document.getElementById('konx-chart-types'), {
+					type: 'doughnut',
+					data: { labels: td.labels, datasets: [{ data: td.values, backgroundColor: ['#2271b1','#00a32a','#dba617'], borderWidth: 0 }] },
+					options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+				});
+			}
+		});
+		</script>
 		<?php
 	}
 
@@ -264,6 +305,21 @@ class Konx_Reports_Page {
 			$from . ' 00:00:00',
 			$to . ' 23:59:59'
 		) );
+	}
+
+	/**
+	 * Prepare labels and values arrays for Chart.js from report rows.
+	 */
+	private static function prepare_chart_labels_values( $rows, $label_col, $value_col ) {
+		$labels = array();
+		$values = array();
+		if ( $rows ) {
+			foreach ( $rows as $row ) {
+				$labels[] = ucwords( str_replace( '_', ' ', $row->$label_col ) );
+				$values[] = (float) $row->$value_col;
+			}
+		}
+		return array( 'labels' => $labels, 'values' => $values );
 	}
 
 	/**
