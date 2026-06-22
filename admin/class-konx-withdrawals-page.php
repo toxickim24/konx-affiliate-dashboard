@@ -78,7 +78,9 @@ class Konx_Withdrawals_Page {
 
 		?>
 		<div class="wrap">
-			<h1><?php esc_html_e( 'Withdrawal Requests', 'konx-affiliate-dashboard' ); ?></h1>
+			<div class="konx-page-header">
+				<h1><?php esc_html_e( 'Withdrawal Requests', 'konx-affiliate-dashboard' ); ?></h1>
+			</div>
 
 			<?php if ( $feedback ) : ?>
 				<div class="notice notice-<?php echo esc_attr( $feedback['type'] ); ?> is-dismissible">
@@ -89,7 +91,7 @@ class Konx_Withdrawals_Page {
 			<!-- Filters -->
 			<form method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>">
 				<input type="hidden" name="page" value="konx-withdrawals">
-				<div class="tablenav top">
+				<div class="konx-filters">
 					<select name="status">
 						<?php foreach ( $statuses as $val => $label ) : ?>
 							<option value="<?php echo esc_attr( $val ); ?>" <?php selected( $status_filter, $val ); ?>>
@@ -104,7 +106,10 @@ class Konx_Withdrawals_Page {
 
 			<!-- Requests Table -->
 			<?php if ( empty( $result['entries'] ) ) : ?>
-				<p><?php esc_html_e( 'No withdrawal requests found.', 'konx-affiliate-dashboard' ); ?></p>
+				<div class="konx-empty-state">
+					<span class="dashicons dashicons-money-alt"></span>
+					<p><?php esc_html_e( 'No withdrawal requests found.', 'konx-affiliate-dashboard' ); ?></p>
+				</div>
 			<?php else : ?>
 				<table class="widefat fixed striped">
 					<thead>
@@ -133,10 +138,9 @@ class Konx_Withdrawals_Page {
 								<td><?php echo esc_html( $req->payment_email ); ?></td>
 								<td>
 									<?php
-									$color = isset( $status_colors[ $req->status ] ) ? $status_colors[ $req->status ] : '#787c82';
 									printf(
-										'<span style="color:%s;font-weight:bold;">%s</span>',
-										esc_attr( $color ),
+										'<span class="konx-badge konx-badge-%s">%s</span>',
+										esc_attr( $req->status ),
 										esc_html( ucfirst( $req->status ) )
 									);
 									?>
