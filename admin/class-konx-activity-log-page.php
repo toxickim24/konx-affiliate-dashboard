@@ -90,7 +90,7 @@ class Konx_Activity_Log_Page {
 							<tr>
 								<th scope="col" style="width:50px;"><?php esc_html_e( 'ID', 'konx-affiliate-dashboard' ); ?></th>
 								<th scope="col" style="width:160px;"><?php esc_html_e( 'Date', 'konx-affiliate-dashboard' ); ?></th>
-								<th scope="col" style="width:160px;"><?php esc_html_e( 'Event', 'konx-affiliate-dashboard' ); ?></th>
+								<th scope="col" style="width:220px;"><?php esc_html_e( 'Event', 'konx-affiliate-dashboard' ); ?></th>
 								<th scope="col"><?php esc_html_e( 'Description', 'konx-affiliate-dashboard' ); ?></th>
 								<th scope="col" style="width:100px;"><?php esc_html_e( 'Object', 'konx-affiliate-dashboard' ); ?></th>
 								<th scope="col" style="width:100px;"><?php esc_html_e( 'Actor', 'konx-affiliate-dashboard' ); ?></th>
