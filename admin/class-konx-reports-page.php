@@ -159,6 +159,18 @@ class Konx_Reports_Page {
 					<?php self::render_leaderboard( $reports['top_by_earnings'], 'total_earnings', '$' ); ?>
 				</div>
 			</div>
+
+			<!-- Export Section -->
+			<div class="konx-card" style="margin-top:20px;">
+				<h2><span class="dashicons dashicons-download" style="color:#2271b1;margin-right:6px;"></span><?php esc_html_e( 'Export Data', 'konx-affiliate-dashboard' ); ?></h2>
+				<p style="font-size:13px;color:#646970;margin:0 0 12px;"><?php esc_html_e( 'Download CSV exports for the data shown above.', 'konx-affiliate-dashboard' ); ?></p>
+				<div style="display:flex;flex-wrap:wrap;gap:8px;">
+					<a href="<?php echo esc_url( Konx_Export_Manager::get_export_url( 'affiliates' ) ); ?>" class="button"><?php esc_html_e( 'Export Affiliates', 'konx-affiliate-dashboard' ); ?></a>
+					<a href="<?php echo esc_url( Konx_Export_Manager::get_export_url( 'commissions' ) ); ?>" class="button"><?php esc_html_e( 'Export Commissions', 'konx-affiliate-dashboard' ); ?></a>
+					<a href="<?php echo esc_url( Konx_Export_Manager::get_export_url( 'withdrawals' ) ); ?>" class="button"><?php esc_html_e( 'Export Withdrawals', 'konx-affiliate-dashboard' ); ?></a>
+					<a href="<?php echo esc_url( Konx_Export_Manager::get_export_url( 'milestones' ) ); ?>" class="button"><?php esc_html_e( 'Export Milestones', 'konx-affiliate-dashboard' ); ?></a>
+				</div>
+			</div>
 		</div>
 
 		<script>
