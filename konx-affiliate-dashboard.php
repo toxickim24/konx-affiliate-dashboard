@@ -187,8 +187,9 @@ function konx_affiliate_init() {
 	Konx_Referral_Tracker::init();
 	Konx_Order_Attribution::init();
 
-	// Commission engine (one-time commissions on completed orders).
+	// Commission engines.
 	Konx_Commission_Engine::init();
+	Konx_Recurring_Commission_Engine::init();
 
 	// Initialize admin pages.
 	if ( is_admin() ) {
