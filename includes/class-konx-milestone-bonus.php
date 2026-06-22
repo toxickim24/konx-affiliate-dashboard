@@ -34,8 +34,12 @@ class Konx_Milestone_Bonus {
 	// ------------------------------------------------------------------
 
 	/**
-	 * Check if the affiliate has reached a new 100-sale milestone
-	 * and award the bonus if so.
+	 * Check for any unawarded milestones and award them.
+	 *
+	 * Scans from milestone 1 up to the highest eligible milestone
+	 * based on completed_sales, awarding any that were missed.
+	 * This handles the case where the Nth sale was blocked and
+	 * the milestone wasn't triggered at the exact boundary.
 	 *
 	 * Called by commission engines after a successful wallet credit.
 	 * Safe to call multiple times — idempotent via unique index.
@@ -55,22 +59,33 @@ class Konx_Milestone_Bonus {
 			return; // Not yet at the first milestone.
 		}
 
-		// Check if the current count is exactly on a milestone boundary.
-		if ( 0 !== ( $sales % self::BLOCK_SIZE ) ) {
-			return; // Not on a boundary.
+		// The highest milestone number this affiliate is eligible for.
+		$max_milestone = (int) floor( $sales / self::BLOCK_SIZE );
+
+		// Check admin fee eligibility once for all milestones in this call.
+		$can_earn = Konx_Admin_Fees::can_affiliate_earn( $affiliate_id );
+
+		// Walk from milestone 1 to max, awarding any that are missing.
+		for ( $m = 1; $m <= $max_milestone; $m++ ) {
+			// Idempotency: skip if already awarded.
+			if ( self::has_bonus_for_milestone( $affiliate_id, $m ) ) {
+				continue;
+			}
+
+			self::award_single_milestone( $affiliate_id, $m, $sales, $can_earn );
 		}
+	}
 
-		$milestone_number = $sales / self::BLOCK_SIZE;
-
-		// Idempotency: check if this milestone was already awarded.
-		if ( self::has_bonus_for_milestone( $affiliate_id, $milestone_number ) ) {
-			return;
-		}
-
-		// Calculate the block boundaries.
-		$block = self::get_milestone_block( $milestone_number );
-
-		// Sum approved commissions in this block.
+	/**
+	 * Award a single milestone bonus.
+	 *
+	 * @param int  $affiliate_id    Affiliate ID.
+	 * @param int  $milestone_number Milestone number to award.
+	 * @param int  $current_sales   Current completed_sales count.
+	 * @param bool $can_earn        Whether admin fees are paid.
+	 */
+	private static function award_single_milestone( $affiliate_id, $milestone_number, $current_sales, $can_earn ) {
+		$block        = self::get_milestone_block( $milestone_number );
 		$bonus_amount = self::calculate_bonus_amount( $affiliate_id, $block['start'], $block['end'] );
 
 		if ( '0.00' === $bonus_amount ) {
@@ -85,15 +100,12 @@ class Konx_Milestone_Bonus {
 			return;
 		}
 
-		// Check admin fee eligibility.
-		$can_earn = Konx_Admin_Fees::can_affiliate_earn( $affiliate_id );
-		$status   = $can_earn ? 'approved' : 'blocked';
+		$status = $can_earn ? 'approved' : 'blocked';
 
-		// Create milestone record.
 		$milestone_id = self::create_bonus_record(
 			$affiliate_id,
 			$milestone_number,
-			$sales,
+			$current_sales,
 			$block['start'],
 			$block['end'],
 			$bonus_amount,
@@ -104,7 +116,6 @@ class Konx_Milestone_Bonus {
 			return;
 		}
 
-		// Credit wallet only if approved.
 		if ( 'approved' === $status ) {
 			self::credit_wallet( $affiliate_id, $milestone_id, $bonus_amount, $milestone_number );
 		}

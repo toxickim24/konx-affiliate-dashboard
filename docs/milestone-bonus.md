@@ -30,37 +30,52 @@ maybe_award_bonus($affiliate_id)
     +-- Get affiliate's completed_sales count
     |     < 100 -> return (too early)
     |
-    +-- Check: completed_sales % 100 === 0 ?
-    |     No -> return (not on a boundary)
+    +-- max_milestone = floor(completed_sales / 100)
     |
-    +-- milestone_number = completed_sales / 100
+    +-- Check admin fee eligibility ONCE for all milestones
     |
-    +-- IDEMPOTENCY: has_bonus_for_milestone(affiliate_id, milestone_number)?
-    |     Yes -> return (already awarded)
-    |
-    +-- Calculate block boundaries:
-    |     end   = milestone_number × 100
-    |     start = end - 99
-    |
-    +-- Sum approved commissions in block:
-    |     SELECT SUM(commission_amount)
-    |     WHERE affiliate_id = X
-    |       AND sale_sequence BETWEEN start AND end
-    |       AND status = 'approved'
-    |
-    |     = 0.00 -> log "skipped, no approved commissions", return
-    |
-    +-- Check admin fee eligibility:
-    |     can_affiliate_earn() -> false: status = 'blocked'
-    |     can_affiliate_earn() -> true:  status = 'approved'
-    |
-    +-- Create milestone record in wp_konx_milestones
-    |
-    +-- If approved: credit wallet
-    |     Konx_Wallet::credit(TYPE_MILESTONE_BONUS, REF_MILESTONE, milestone_id)
-    |
-    +-- Log to audit
+    +-- FOR milestone 1 to max_milestone:
+          |
+          +-- IDEMPOTENCY: has_bonus_for_milestone(affiliate_id, m)?
+          |     Yes -> skip (already awarded)
+          |
+          +-- award_single_milestone():
+                |
+                +-- Calculate block boundaries:
+                |     end   = m × 100,  start = end - 99
+                |
+                +-- Sum approved commissions in block:
+                |     SUM(commission_amount)
+                |     WHERE sale_sequence BETWEEN start AND end
+                |       AND status = 'approved'
+                |
+                |     = 0.00 -> log "skipped", continue to next
+                |
+                +-- Determine status:
+                |     can_earn -> 'approved'
+                |     !can_earn -> 'blocked'
+                |
+                +-- Create milestone record
+                |
+                +-- If approved: credit wallet
+                |     Konx_Wallet::credit(TYPE_MILESTONE_BONUS, REF_MILESTONE, milestone_id)
+                |
+                +-- Log to audit
 ```
+
+### Catch-Up Behavior
+
+The engine scans **all milestones from 1 to max**, not just the
+current boundary. This means:
+
+- If the 100th sale was blocked, the milestone is awarded when the
+  101st (approved) commission triggers the check.
+- If an affiliate jumps from 95 to 205 sales (e.g., bulk import),
+  milestones 1 and 2 are both awarded in a single call.
+- Already-awarded milestones are skipped via `has_bonus_for_milestone()`.
+
+This eliminates the boundary-miss problem where a blocked commission
+at the exact 100th sale would permanently skip the milestone.
 
 ## Sale Sequence Block Rules
 
@@ -189,20 +204,21 @@ The milestone check runs after `credit_wallet()` because:
 
 ### Why Only For Approved Commissions
 
-Blocked commissions don't increment `completed_sales` in the
-commission engine — wait, they do. Both approved and blocked
-commissions get a sale_sequence and increment completed_sales.
-However, the milestone is only called when the commission is
-approved (inside the `if STATUS_APPROVED` block). This means
-blocked commissions can push the count to 100 but the milestone
-check won't fire until the next approved commission.
+Both approved and blocked commissions get a `sale_sequence` and
+increment `completed_sales`. However, the milestone check is only
+called when the commission is approved (inside the `if STATUS_APPROVED`
+block). This means blocked commissions can push the count past a
+boundary without triggering the milestone check.
 
-If the 100th sale is blocked, the milestone triggers when the 101st
-(approved) sale is processed. At that point, `completed_sales` is
-101, which is not on a 100 boundary, so the milestone doesn't
-trigger. The milestone for block 1 would need to be awarded manually
-or via a reconciliation process. This is an acceptable edge case
-for the initial implementation.
+When the next approved commission fires the check, the catch-up
+loop detects all missed milestones and awards them. For example:
+
+- Sales 1–99: approved, no milestone yet
+- Sale 100: blocked (admin fee unpaid) — count = 100, no milestone check
+- Sale 101: approved — count = 101, check fires
+  - Loop: milestone 1 (max = floor(101/100) = 1)
+  - has_bonus_for_milestone(1)? No → award milestone 1
+  - Block 1–100 summed, bonus created and credited
 
 ## Progress Display
 
@@ -256,12 +272,14 @@ Used by the frontend affiliate dashboard to show a progress bar.
 - [ ] Database unique index prevents duplicate on race condition
 - [ ] Wallet `entry_exists()` prevents double-crediting
 
-### Edge Cases
+### Edge Cases and Catch-Up
 
-- [ ] Affiliate with 99 sales -> no milestone (not on boundary)
-- [ ] Affiliate with 101 sales -> no milestone for 100 if it was the blocked sale
+- [ ] Affiliate with 99 sales -> no milestone (not enough sales)
+- [ ] 100th sale blocked, 101st approved -> milestone 1 awarded at sale 101
+- [ ] 100th and 200th both missed -> both awarded on next approved commission
 - [ ] Block with all reversed commissions -> bonus = $0, milestone skipped
 - [ ] Block with $0 total -> skipped with audit log entry
+- [ ] Bulk jump from 50 to 250 sales -> milestones 1 and 2 both awarded
 
 ### Progress
 
