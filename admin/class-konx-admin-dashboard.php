@@ -149,28 +149,30 @@ class Konx_Admin_Dashboard {
 				</div>
 			</div>
 
-			<!-- Quick Links -->
-			<div class="konx-grid-3" style="margin-top:20px;">
-				<div class="konx-card">
-					<h2><span class="dashicons dashicons-download" style="color:#2271b1;margin-right:6px;"></span><?php esc_html_e( 'Export Data', 'konx-affiliate-dashboard' ); ?></h2>
-					<p style="font-size:13px;color:#646970;margin:0 0 12px;"><?php esc_html_e( 'Download CSV reports for your records.', 'konx-affiliate-dashboard' ); ?></p>
-					<div style="display:flex;flex-wrap:wrap;gap:6px;">
-						<a href="<?php echo esc_url( Konx_Export_Manager::get_export_url( 'affiliates' ) ); ?>" class="button button-small"><?php esc_html_e( 'Affiliates', 'konx-affiliate-dashboard' ); ?></a>
-						<a href="<?php echo esc_url( Konx_Export_Manager::get_export_url( 'commissions' ) ); ?>" class="button button-small"><?php esc_html_e( 'Commissions', 'konx-affiliate-dashboard' ); ?></a>
-						<a href="<?php echo esc_url( Konx_Export_Manager::get_export_url( 'withdrawals' ) ); ?>" class="button button-small"><?php esc_html_e( 'Withdrawals', 'konx-affiliate-dashboard' ); ?></a>
-						<a href="<?php echo esc_url( Konx_Export_Manager::get_export_url( 'milestones' ) ); ?>" class="button button-small"><?php esc_html_e( 'Milestones', 'konx-affiliate-dashboard' ); ?></a>
+			<!-- Recent Activity Feed -->
+			<div class="konx-card" style="margin-top:20px;">
+				<h2><?php esc_html_e( 'Recent Activity', 'konx-affiliate-dashboard' ); ?></h2>
+				<?php
+				$activity = self::get_activity_feed();
+				if ( empty( $activity ) ) :
+				?>
+					<div class="konx-empty-state">
+						<span class="dashicons dashicons-clock"></span>
+						<p><?php esc_html_e( 'No recent activity. Events will appear here as affiliates register, earn commissions, and request withdrawals.', 'konx-affiliate-dashboard' ); ?></p>
 					</div>
-				</div>
-				<div class="konx-card">
-					<h2><span class="dashicons dashicons-admin-tools" style="color:#2271b1;margin-right:6px;"></span><?php esc_html_e( 'System Status', 'konx-affiliate-dashboard' ); ?></h2>
-					<p style="font-size:13px;color:#646970;margin:0 0 12px;"><?php esc_html_e( 'Check plugin health, database, and requirements.', 'konx-affiliate-dashboard' ); ?></p>
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=konx-system-status' ) ); ?>" class="button button-small"><?php esc_html_e( 'View Status', 'konx-affiliate-dashboard' ); ?></a>
-				</div>
-				<div class="konx-card">
-					<h2><span class="dashicons dashicons-editor-help" style="color:#2271b1;margin-right:6px;"></span><?php esc_html_e( 'Help Center', 'konx-affiliate-dashboard' ); ?></h2>
-					<p style="font-size:13px;color:#646970;margin:0 0 12px;"><?php esc_html_e( 'Setup guides, FAQ, shortcodes, and troubleshooting.', 'konx-affiliate-dashboard' ); ?></p>
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=konx-help' ) ); ?>" class="button button-small"><?php esc_html_e( 'Open Help', 'konx-affiliate-dashboard' ); ?></a>
-				</div>
+				<?php else : ?>
+					<div class="konx-activity-feed">
+						<?php foreach ( $activity as $event ) : ?>
+							<div class="konx-activity-item">
+								<span class="dashicons <?php echo esc_attr( $event['icon'] ); ?>" style="color:<?php echo esc_attr( $event['color'] ); ?>;"></span>
+								<div>
+									<span><?php echo esc_html( $event['text'] ); ?></span>
+									<small><?php echo esc_html( $event['time'] ); ?></small>
+								</div>
+							</div>
+						<?php endforeach; ?>
+					</div>
+				<?php endif; ?>
 			</div>
 		</div>
 
@@ -266,5 +268,53 @@ class Konx_Admin_Dashboard {
 			'commissions' => array( 'labels' => $labels, 'values' => $cv ),
 			'withdrawals' => array( 'labels' => $labels, 'values' => $wv ),
 		);
+	}
+
+	/**
+	 * Get a unified activity feed from audit log.
+	 *
+	 * @return array Array of { icon, color, text, time }.
+	 */
+	private static function get_activity_feed() {
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'konx_audit_log';
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rows = $wpdb->get_results(
+			"SELECT event_type, object_type, description, created_at FROM {$table} ORDER BY id DESC LIMIT 15"
+		);
+
+		if ( ! $rows ) {
+			return array();
+		}
+
+		$icons = array(
+			'affiliate_registered'  => array( 'dashicons-admin-users', '#2271b1' ),
+			'commission_created'    => array( 'dashicons-money-alt', '#00a32a' ),
+			'recurring_commission_created' => array( 'dashicons-update', '#00a32a' ),
+			'withdrawal_created'    => array( 'dashicons-migrate', '#dba617' ),
+			'withdrawal_completed'  => array( 'dashicons-yes-alt', '#00a32a' ),
+			'withdrawal_approved'   => array( 'dashicons-thumbs-up', '#2271b1' ),
+			'withdrawal_rejected'   => array( 'dashicons-dismiss', '#d63638' ),
+			'milestone_bonus_awarded' => array( 'dashicons-star-filled', '#dba617' ),
+			'affiliate_type_changed' => array( 'dashicons-admin-generic', '#646970' ),
+			'affiliate_status_changed' => array( 'dashicons-admin-generic', '#646970' ),
+			'admin_fee_paid'        => array( 'dashicons-money-alt', '#00a32a' ),
+			'refund_processed'      => array( 'dashicons-undo', '#d63638' ),
+		);
+
+		$feed = array();
+		foreach ( $rows as $row ) {
+			$def   = isset( $icons[ $row->event_type ] ) ? $icons[ $row->event_type ] : array( 'dashicons-info-outline', '#646970' );
+			$feed[] = array(
+				'icon'  => $def[0],
+				'color' => $def[1],
+				'text'  => $row->description,
+				'time'  => human_time_diff( strtotime( $row->created_at ), current_time( 'timestamp', true ) ) . ' ' . __( 'ago', 'konx-affiliate-dashboard' ),
+			);
+		}
+
+		return $feed;
 	}
 }

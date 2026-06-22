@@ -64,17 +64,24 @@ $fee       = $data['fee_status'];
 		</div>
 	</div>
 
-	<!-- User Journey / Getting Started -->
-	<?php if ( ! empty( $data['journey'] ) && $data['journey']['percent'] < 100 ) : ?>
+	<!-- Affiliate Success Journey -->
+	<?php if ( ! empty( $data['journey'] ) ) : ?>
 		<?php $journey = $data['journey']; ?>
-		<div class="konx-section">
-			<h3><?php esc_html_e( 'Getting Started', 'konx-affiliate-dashboard' ); ?> — <?php echo esc_html( $journey['percent'] ); ?>% <?php esc_html_e( 'Complete', 'konx-affiliate-dashboard' ); ?></h3>
-			<div class="konx-progress-bar" role="progressbar" aria-valuenow="<?php echo esc_attr( $journey['percent'] ); ?>" aria-valuemin="0" aria-valuemax="100">
-				<div class="konx-progress-fill" style="width:<?php echo esc_attr( $journey['percent'] ); ?>%;"></div>
+		<div class="konx-section konx-journey-section">
+			<h3><?php esc_html_e( 'Affiliate Success Journey', 'konx-affiliate-dashboard' ); ?> — <strong><?php echo esc_html( $journey['percent'] ); ?>%</strong> <?php esc_html_e( 'Complete', 'konx-affiliate-dashboard' ); ?></h3>
+			<div class="konx-progress-bar" role="progressbar" aria-valuenow="<?php echo esc_attr( $journey['percent'] ); ?>" aria-valuemin="0" aria-valuemax="100" aria-label="<?php esc_attr_e( 'Journey progress', 'konx-affiliate-dashboard' ); ?>">
+				<div class="konx-progress-fill" style="width:<?php echo esc_attr( min( 100, $journey['percent'] ) ); ?>%;"></div>
 			</div>
+
+			<?php if ( $journey['percent'] >= 100 ) : ?>
+				<div class="konx-notice konx-notice-success" style="margin-top:12px;">
+					<?php esc_html_e( 'Congratulations! You have completed all journey milestones. Keep growing your affiliate business!', 'konx-affiliate-dashboard' ); ?>
+				</div>
+			<?php endif; ?>
+
 			<div class="konx-journey-grid">
 				<?php foreach ( $journey['steps'] as $step ) : ?>
-					<div class="konx-journey-step <?php echo $step['done'] ? 'done' : ''; ?>">
+					<div class="konx-journey-step <?php echo $step['done'] ? 'done' : 'pending'; ?>">
 						<span class="konx-journey-check"><?php echo $step['done'] ? '&#10003;' : '&#9675;'; ?></span>
 						<div>
 							<strong><?php echo esc_html( $step['label'] ); ?></strong>
@@ -85,10 +92,12 @@ $fee       = $data['fee_status'];
 					</div>
 				<?php endforeach; ?>
 			</div>
+
 			<?php if ( $journey['next_action'] ) : ?>
-				<p class="konx-muted" style="margin-top:12px;">
-					<?php printf( esc_html__( 'Next step: %s', 'konx-affiliate-dashboard' ), '<strong>' . esc_html( $journey['next_action']['hint'] ) . '</strong>' ); ?>
-				</p>
+				<div class="konx-journey-next">
+					<strong><?php esc_html_e( 'Next Step:', 'konx-affiliate-dashboard' ); ?></strong>
+					<?php echo esc_html( $journey['next_action']['hint'] ); ?>
+				</div>
 			<?php endif; ?>
 		</div>
 	<?php endif; ?>
