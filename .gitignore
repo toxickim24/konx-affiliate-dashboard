@@ -1,0 +1,18 @@
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Dependencies
+node_modules/
+vendor/
+composer.lock
+
+# Debug
+npm-debug.log
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
