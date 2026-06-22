@@ -199,6 +199,9 @@ function konx_affiliate_init() {
 	// Admin fee cron handler.
 	Konx_Admin_Fees::init();
 
+	// GitHub update checker.
+	Konx_Updater::init();
+
 	// Initialize admin pages.
 	if ( is_admin() ) {
 		add_action( 'admin_enqueue_scripts', 'konx_enqueue_admin_assets' );
@@ -209,6 +212,9 @@ function konx_affiliate_init() {
 		Konx_Withdrawals_Page::init();
 		Konx_Reports_Page::init();
 		Konx_Settings_Page::init();
+		Konx_Help_Center::init();
+		Konx_System_Status::init();
+		Konx_Export_Manager::init();
 	}
 }
 add_action( 'plugins_loaded', 'konx_affiliate_init' );
