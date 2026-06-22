@@ -159,10 +159,7 @@ class Konx_Affiliates_Page {
 								<td><?php echo esc_html( $aff->user_email ); ?></td>
 								<td><?php echo esc_html( ucwords( str_replace( '_', ' ', $aff->affiliate_type ) ) ); ?></td>
 								<td>
-									<?php
-									$color = isset( $status_colors[ $aff->status ] ) ? $status_colors[ $aff->status ] : '#787c82';
-									printf( '<span style="color:%s;font-weight:600;">%s</span>', esc_attr( $color ), esc_html( ucfirst( $aff->status ) ) );
-									?>
+									<span class="konx-badge konx-badge-<?php echo esc_attr( $aff->status ); ?>"><?php echo esc_html( ucfirst( $aff->status ) ); ?></span>
 								</td>
 								<td><code><?php echo esc_html( $aff->referral_code ); ?></code></td>
 								<td><?php echo esc_html( $aff->completed_sales ); ?></td>
