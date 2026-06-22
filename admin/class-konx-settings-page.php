@@ -90,7 +90,9 @@ class Konx_Settings_Page {
 
 		?>
 		<div class="wrap">
-			<h1><?php esc_html_e( 'Settings', 'konx-affiliate-dashboard' ); ?></h1>
+			<div class="konx-page-header">
+				<h1><?php esc_html_e( 'Settings', 'konx-affiliate-dashboard' ); ?></h1>
+			</div>
 
 			<?php if ( $feedback ) : ?>
 				<div class="notice notice-<?php echo esc_attr( $feedback['type'] ); ?> is-dismissible">
@@ -103,119 +105,136 @@ class Konx_Settings_Page {
 				<?php wp_nonce_field( 'konx_save_settings', 'konx_settings_nonce' ); ?>
 
 				<!-- Commission Rates -->
-				<h2><?php esc_html_e( 'Commission Rates (%)', 'konx-affiliate-dashboard' ); ?></h2>
-				<p class="description"><?php esc_html_e( 'One-time commission rates for pack purchases. Enter as percentage (e.g., 40 for 40%).', 'konx-affiliate-dashboard' ); ?></p>
-				<table class="widefat fixed" style="max-width:700px;">
-					<thead>
-						<tr>
-							<th><?php esc_html_e( 'Affiliate Type', 'konx-affiliate-dashboard' ); ?></th>
-							<?php foreach ( self::$product_types as $slug => $label ) : ?>
-								<th><?php echo esc_html( $label ); ?></th>
-							<?php endforeach; ?>
-						</tr>
-					</thead>
-					<tbody>
-						<?php foreach ( self::$affiliate_types as $aff_type => $aff_label ) : ?>
-							<tr>
-								<td><strong><?php echo esc_html( $aff_label ); ?></strong></td>
-								<?php foreach ( self::$product_types as $prod_type => $prod_label ) : ?>
-									<?php
-									$key       = $aff_type . '_' . $prod_type;
-									$rate_val  = isset( $rates[ $key ] ) ? $rates[ $key ] : '0';
-									$rate_pct  = number_format( (float) $rate_val * 100, 0 );
-									?>
-									<td>
-										<input type="number" name="rates[<?php echo esc_attr( $key ); ?>]"
-											value="<?php echo esc_attr( $rate_pct ); ?>"
-											min="0" max="100" step="1" style="width:70px;">
-									</td>
+				<div class="konx-form-card">
+					<h2><?php esc_html_e( 'Commission Rates (%)', 'konx-affiliate-dashboard' ); ?></h2>
+					<p class="description"><?php esc_html_e( 'One-time commission rates for pack purchases. Enter as percentage (e.g., 40 for 40%).', 'konx-affiliate-dashboard' ); ?></p>
+					<div class="konx-table-wrap">
+						<table class="widefat fixed striped" style="max-width:700px;margin-top:12px;">
+							<thead>
+								<tr>
+									<th scope="col"><?php esc_html_e( 'Affiliate Type', 'konx-affiliate-dashboard' ); ?></th>
+									<?php foreach ( self::$product_types as $slug => $label ) : ?>
+										<th scope="col"><?php echo esc_html( $label ); ?></th>
+									<?php endforeach; ?>
+								</tr>
+							</thead>
+							<tbody>
+								<?php foreach ( self::$affiliate_types as $aff_type => $aff_label ) : ?>
+									<tr>
+										<th scope="row"><?php echo esc_html( $aff_label ); ?></th>
+										<?php foreach ( self::$product_types as $prod_type => $prod_label ) : ?>
+											<?php
+											$key      = $aff_type . '_' . $prod_type;
+											$rate_val = isset( $rates[ $key ] ) ? $rates[ $key ] : '0';
+											$rate_pct = number_format( (float) $rate_val * 100, 0 );
+											?>
+											<td>
+												<input type="number" name="rates[<?php echo esc_attr( $key ); ?>]"
+													value="<?php echo esc_attr( $rate_pct ); ?>"
+													min="0" max="100" step="1" style="width:70px;"
+													aria-label="<?php echo esc_attr( $aff_label . ' - ' . $prod_label ); ?>"> %
+											</td>
+										<?php endforeach; ?>
+									</tr>
 								<?php endforeach; ?>
+							</tbody>
+						</table>
+					</div>
+				</div>
+
+				<div class="konx-grid-2">
+					<!-- Recurring Commission -->
+					<div class="konx-form-card">
+						<h2><?php esc_html_e( 'Recurring Commission', 'konx-affiliate-dashboard' ); ?></h2>
+						<p class="description"><?php esc_html_e( 'Applied to subscription renewals. Same rate for all affiliate types.', 'konx-affiliate-dashboard' ); ?></p>
+						<table class="form-table">
+							<tr>
+								<th><label for="recurring_rate"><?php esc_html_e( 'Rate', 'konx-affiliate-dashboard' ); ?></label></th>
+								<td>
+									<input type="number" id="recurring_rate" name="recurring_rate"
+										value="<?php echo esc_attr( $recurring_pct ); ?>"
+										min="0" max="100" step="1" style="width:70px;"> %
+								</td>
 							</tr>
-						<?php endforeach; ?>
-					</tbody>
-				</table>
+						</table>
+					</div>
 
-				<!-- Recurring Commission -->
-				<h2 style="margin-top:30px;"><?php esc_html_e( 'Recurring Commission Rate (%)', 'konx-affiliate-dashboard' ); ?></h2>
-				<p class="description"><?php esc_html_e( 'Applied to subscription renewals (conference rooms, eCard renewals). Same rate for all affiliate types.', 'konx-affiliate-dashboard' ); ?></p>
-				<table class="form-table">
-					<tr>
-						<th><label for="recurring_rate"><?php esc_html_e( 'Rate', 'konx-affiliate-dashboard' ); ?></label></th>
-						<td>
-							<input type="number" id="recurring_rate" name="recurring_rate"
-								value="<?php echo esc_attr( $recurring_pct ); ?>"
-								min="0" max="100" step="1" style="width:70px;"> %
-						</td>
-					</tr>
-				</table>
+					<!-- Withdrawal Settings -->
+					<div class="konx-form-card">
+						<h2><?php esc_html_e( 'Withdrawal Settings', 'konx-affiliate-dashboard' ); ?></h2>
+						<table class="form-table">
+							<tr>
+								<th><label for="min_withdrawal"><?php esc_html_e( 'Minimum ($)', 'konx-affiliate-dashboard' ); ?></label></th>
+								<td>
+									<input type="number" id="min_withdrawal" name="min_withdrawal"
+										value="<?php echo esc_attr( $min_wd ); ?>"
+										min="0" step="0.01" style="width:100px;">
+								</td>
+							</tr>
+						</table>
+					</div>
+				</div>
 
-				<!-- Admin Fees -->
-				<h2 style="margin-top:30px;"><?php esc_html_e( 'Monthly Admin Fees ($)', 'konx-affiliate-dashboard' ); ?></h2>
-				<p class="description"><?php esc_html_e( 'Monthly fee per affiliate type. Leave blank to use the default.', 'konx-affiliate-dashboard' ); ?></p>
-				<table class="form-table">
-					<?php foreach ( self::$affiliate_types as $aff_type => $aff_label ) : ?>
-						<tr>
-							<th><label for="fee_<?php echo esc_attr( $aff_type ); ?>"><?php echo esc_html( $aff_label ); ?></label></th>
-							<td>
-								$<input type="number" id="fee_<?php echo esc_attr( $aff_type ); ?>"
-									name="fees[<?php echo esc_attr( $aff_type ); ?>]"
-									value="<?php echo esc_attr( ! empty( $fee_settings[ $aff_type ] ) ? $fee_settings[ $aff_type ] : '' ); ?>"
-									min="0" step="0.01" style="width:100px;">
-							</td>
-						</tr>
-					<?php endforeach; ?>
-					<tr>
-						<th><label for="fee_default"><?php esc_html_e( 'Default', 'konx-affiliate-dashboard' ); ?></label></th>
-						<td>
-							$<input type="number" id="fee_default" name="fees[default]"
-								value="<?php echo esc_attr( ! empty( $fee_settings['default'] ) ? $fee_settings['default'] : '10.00' ); ?>"
-								min="0" step="0.01" style="width:100px;">
-						</td>
-					</tr>
-				</table>
+				<div class="konx-grid-2">
+					<!-- Admin Fees -->
+					<div class="konx-form-card">
+						<h2><?php esc_html_e( 'Monthly Admin Fees ($)', 'konx-affiliate-dashboard' ); ?></h2>
+						<p class="description"><?php esc_html_e( 'Leave blank to use the default.', 'konx-affiliate-dashboard' ); ?></p>
+						<table class="form-table">
+							<?php foreach ( self::$affiliate_types as $aff_type => $aff_label ) : ?>
+								<tr>
+									<th><label for="fee_<?php echo esc_attr( $aff_type ); ?>"><?php echo esc_html( $aff_label ); ?></label></th>
+									<td>
+										$<input type="number" id="fee_<?php echo esc_attr( $aff_type ); ?>"
+											name="fees[<?php echo esc_attr( $aff_type ); ?>]"
+											value="<?php echo esc_attr( ! empty( $fee_settings[ $aff_type ] ) ? $fee_settings[ $aff_type ] : '' ); ?>"
+											min="0" step="0.01" style="width:90px;" placeholder="auto">
+									</td>
+								</tr>
+							<?php endforeach; ?>
+							<tr>
+								<th><label for="fee_default"><?php esc_html_e( 'Default', 'konx-affiliate-dashboard' ); ?></label></th>
+								<td>
+									$<input type="number" id="fee_default" name="fees[default]"
+										value="<?php echo esc_attr( ! empty( $fee_settings['default'] ) ? $fee_settings['default'] : '10.00' ); ?>"
+										min="0" step="0.01" style="width:90px;">
+								</td>
+							</tr>
+						</table>
+					</div>
 
-				<!-- Withdrawal Settings -->
-				<h2 style="margin-top:30px;"><?php esc_html_e( 'Withdrawal Settings', 'konx-affiliate-dashboard' ); ?></h2>
-				<table class="form-table">
-					<tr>
-						<th><label for="min_withdrawal"><?php esc_html_e( 'Minimum Withdrawal ($)', 'konx-affiliate-dashboard' ); ?></label></th>
-						<td>
-							$<input type="number" id="min_withdrawal" name="min_withdrawal"
-								value="<?php echo esc_attr( $min_wd ); ?>"
-								min="0" step="0.01" style="width:100px;">
-						</td>
-					</tr>
-				</table>
-
-				<!-- Referral Settings -->
-				<h2 style="margin-top:30px;"><?php esc_html_e( 'Referral Settings', 'konx-affiliate-dashboard' ); ?></h2>
-				<table class="form-table">
-					<tr>
-						<th><label for="cookie_days"><?php esc_html_e( 'Cookie Duration (days)', 'konx-affiliate-dashboard' ); ?></label></th>
-						<td>
-							<input type="number" id="cookie_days" name="cookie_days"
-								value="<?php echo esc_attr( $cookie_days ); ?>"
-								min="1" max="365" step="1" style="width:80px;">
-						</td>
-					</tr>
-					<tr>
-						<th><label for="ref_param"><?php esc_html_e( 'URL Parameter', 'konx-affiliate-dashboard' ); ?></label></th>
-						<td>
-							<input type="text" id="ref_param" name="ref_param"
-								value="<?php echo esc_attr( $ref_param ); ?>"
-								style="width:100px;">
-							<p class="description"><?php esc_html_e( 'The query parameter used in referral URLs (e.g., "ref" for ?ref=CODE).', 'konx-affiliate-dashboard' ); ?></p>
-						</td>
-					</tr>
-					<tr>
-						<th><label for="dedup_hours"><?php esc_html_e( 'Click Dedup Window (hours)', 'konx-affiliate-dashboard' ); ?></label></th>
-						<td>
-							<input type="number" id="dedup_hours" name="dedup_hours"
-								value="<?php echo esc_attr( $dedup_hours ); ?>"
-								min="1" max="168" step="1" style="width:80px;">
-						</td>
-					</tr>
-				</table>
+					<!-- Referral Settings -->
+					<div class="konx-form-card">
+						<h2><?php esc_html_e( 'Referral Settings', 'konx-affiliate-dashboard' ); ?></h2>
+						<table class="form-table">
+							<tr>
+								<th><label for="cookie_days"><?php esc_html_e( 'Cookie (days)', 'konx-affiliate-dashboard' ); ?></label></th>
+								<td>
+									<input type="number" id="cookie_days" name="cookie_days"
+										value="<?php echo esc_attr( $cookie_days ); ?>"
+										min="1" max="365" step="1" style="width:80px;">
+								</td>
+							</tr>
+							<tr>
+								<th><label for="ref_param"><?php esc_html_e( 'URL Param', 'konx-affiliate-dashboard' ); ?></label></th>
+								<td>
+									<input type="text" id="ref_param" name="ref_param"
+										value="<?php echo esc_attr( $ref_param ); ?>"
+										style="width:80px;">
+									<p class="description"><?php esc_html_e( 'e.g., "ref" for ?ref=CODE', 'konx-affiliate-dashboard' ); ?></p>
+								</td>
+							</tr>
+							<tr>
+								<th><label for="dedup_hours"><?php esc_html_e( 'Dedup (hours)', 'konx-affiliate-dashboard' ); ?></label></th>
+								<td>
+									<input type="number" id="dedup_hours" name="dedup_hours"
+										value="<?php echo esc_attr( $dedup_hours ); ?>"
+										min="1" max="168" step="1" style="width:80px;">
+								</td>
+							</tr>
+						</table>
+					</div>
+				</div>
 
 				<?php submit_button( __( 'Save All Settings', 'konx-affiliate-dashboard' ) ); ?>
 			</form>

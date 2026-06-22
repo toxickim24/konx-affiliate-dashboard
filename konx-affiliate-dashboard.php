@@ -199,8 +199,12 @@ function konx_affiliate_init() {
 	// Admin fee cron handler.
 	Konx_Admin_Fees::init();
 
+	// GitHub update checker.
+	Konx_Updater::init();
+
 	// Initialize admin pages.
 	if ( is_admin() ) {
+		add_action( 'admin_enqueue_scripts', 'konx_enqueue_admin_assets' );
 		Konx_Admin_Dashboard::init();
 		Konx_Affiliates_Page::init();
 		Konx_Admin_Product_Mapping::init();
@@ -208,6 +212,29 @@ function konx_affiliate_init() {
 		Konx_Withdrawals_Page::init();
 		Konx_Reports_Page::init();
 		Konx_Settings_Page::init();
+		Konx_Help_Center::init();
+		Konx_System_Status::init();
+		Konx_Export_Manager::init();
 	}
 }
 add_action( 'plugins_loaded', 'konx_affiliate_init' );
+
+/**
+ * Enqueue admin CSS on KonX admin pages.
+ *
+ * @param string $hook The admin page hook suffix.
+ */
+function konx_enqueue_admin_assets( $hook ) {
+	// Only load on our pages.
+	if ( strpos( $hook, 'konx-' ) === false && strpos( $hook, 'konx_' ) === false
+		&& 'toplevel_page_konx-affiliate-dashboard' !== $hook ) {
+		return;
+	}
+
+	wp_enqueue_style(
+		'konx-admin',
+		KONX_AFFILIATE_PLUGIN_URL . 'assets/css/konx-admin.css',
+		array(),
+		KONX_AFFILIATE_VERSION
+	);
+}

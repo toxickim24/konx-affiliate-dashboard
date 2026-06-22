@@ -1,5 +1,6 @@
 /**
  * KonX Affiliate Registration — Frontend Styles
+ * Uses CSS variables from konx-frontend.css design system.
  */
 
 .konx-registration {
@@ -7,65 +8,68 @@
 	margin: 0 auto;
 	font-size: 15px;
 	line-height: 1.6;
-	color: #1d2327;
+	color: var(--konx-text, #1d2327);
+	padding: 0 16px;
 }
 
 .konx-registration h3 {
 	margin: 0 0 8px;
-	font-size: 20px;
-	font-weight: 600;
+	font-size: 22px;
+	font-weight: 700;
 }
 
 .konx-registration > p {
 	margin: 0 0 20px;
-	color: #646970;
+	color: var(--konx-text-light, #646970);
 }
 
 /* Notices */
 .konx-reg-notice {
-	padding: 12px 16px;
-	border-radius: 4px;
+	padding: 14px 18px;
+	border-radius: var(--konx-radius-sm, 4px);
 	margin-bottom: 16px;
 	font-size: 14px;
 }
 
 .konx-reg-notice-success {
-	background: #edfaef;
-	border: 1px solid #00a32a;
+	background: var(--konx-success-bg, #edfaef);
+	border-left: 4px solid var(--konx-success, #00a32a);
 	color: #00450b;
 }
 
 .konx-reg-notice-error {
-	background: #fcf0f1;
-	border: 1px solid #d63638;
+	background: var(--konx-danger-bg, #fcf0f1);
+	border-left: 4px solid var(--konx-danger, #d63638);
 	color: #8a1114;
 }
 
 .konx-reg-notice-info {
-	background: #f0f6fc;
-	border: 1px solid #72aee6;
+	background: var(--konx-info-bg, #f0f6fc);
+	border: 1px solid var(--konx-info, #72aee6);
 	color: #1d4e89;
 	text-align: center;
-	padding: 24px;
+	padding: 28px;
 }
 
 /* Form */
 .konx-reg-form {
-	background: #fff;
-	border: 1px solid #dcdcde;
-	border-radius: 6px;
-	padding: 24px;
+	background: var(--konx-white, #fff);
+	border: 1px solid var(--konx-border, #dcdcde);
+	border-radius: var(--konx-radius, 8px);
+	padding: 28px;
+	box-shadow: var(--konx-shadow, 0 1px 4px rgba(0,0,0,0.06));
 }
 
 .konx-reg-row {
-	margin-bottom: 16px;
+	margin-bottom: 18px;
 }
 
 .konx-reg-row label {
 	display: block;
 	font-weight: 600;
-	margin-bottom: 4px;
-	font-size: 14px;
+	margin-bottom: 6px;
+	font-size: 13px;
+	color: var(--konx-text, #1d2327);
 }
 
 .konx-reg-row input[type="text"],
@@ -74,28 +78,29 @@
 .konx-reg-row select {
 	width: 100%;
 	padding: 10px 12px;
-	border: 1px solid #8c8f94;
-	border-radius: 4px;
-	font-size: 15px;
+	border: 1px solid var(--konx-border, #dcdcde);
+	border-radius: var(--konx-radius-sm, 4px);
+	font-size: 14px;
 	box-sizing: border-box;
+	transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .konx-reg-row input:focus,
 .konx-reg-row select:focus {
-	border-color: #2271b1;
+	border-color: var(--konx-primary, #2271b1);
 	outline: none;
-	box-shadow: 0 0 0 1px #2271b1;
+	box-shadow: 0 0 0 2px rgba(34, 113, 177, 0.15);
 }
 
 .konx-reg-row small {
 	display: block;
 	margin-top: 4px;
-	color: #646970;
+	color: var(--konx-text-light, #646970);
 	font-size: 12px;
 }
 
 .konx-reg-row .required {
-	color: #d63638;
+	color: var(--konx-danger, #d63638);
 }
 
 /* Terms */
@@ -117,19 +122,25 @@
 .konx-reg-btn {
 	display: block;
 	width: 100%;
-	padding: 12px;
-	background: #2271b1;
+	padding: 13px;
+	background: var(--konx-primary, #2271b1);
 	color: #fff;
 	border: none;
-	border-radius: 4px;
+	border-radius: var(--konx-radius-sm, 4px);
 	font-size: 16px;
 	font-weight: 600;
 	cursor: pointer;
-	margin-top: 8px;
+	margin-top: 12px;
+	transition: background 0.15s;
 }
 
 .konx-reg-btn:hover {
-	background: #135e96;
+	background: var(--konx-primary-hover, #135e96);
+}
+
+.konx-reg-btn:focus-visible {
+	outline: 2px solid var(--konx-primary, #2271b1);
+	outline-offset: 2px;
 }
 
 /* Responsive */
@@ -139,6 +150,6 @@
 	}
 
 	.konx-reg-form {
-		padding: 16px;
+		padding: 18px;
 	}
 }
