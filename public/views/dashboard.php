@@ -183,6 +183,22 @@ $fee       = $data['fee_status'];
 				</div>
 			</div>
 		</div>
+
+		<!-- Share & QR -->
+		<div style="margin-top:14px;">
+			<label style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--konx-text-light,#646970);font-weight:600;display:block;margin-bottom:8px;"><?php esc_html_e( 'Share Your Link', 'konx-affiliate-dashboard' ); ?></label>
+			<div style="display:flex;gap:8px;flex-wrap:wrap;">
+				<?php
+				$share_url   = urlencode( $data['referral_url'] );
+				$share_text  = urlencode( __( 'Check out KonX! Use my referral link:', 'konx-affiliate-dashboard' ) );
+				$share_email = rawurlencode( __( 'Join KonX', 'konx-affiliate-dashboard' ) );
+				?>
+				<a href="https://www.facebook.com/sharer/sharer.php?u=<?php echo $share_url; ?>" target="_blank" rel="noopener" class="konx-btn konx-btn-sm konx-btn-outline" title="Facebook"><?php esc_html_e( 'Facebook', 'konx-affiliate-dashboard' ); ?></a>
+				<a href="https://twitter.com/intent/tweet?text=<?php echo $share_text; ?>&url=<?php echo $share_url; ?>" target="_blank" rel="noopener" class="konx-btn konx-btn-sm konx-btn-outline" title="X"><?php esc_html_e( 'X / Twitter', 'konx-affiliate-dashboard' ); ?></a>
+				<a href="https://www.linkedin.com/sharing/share-offsite/?url=<?php echo $share_url; ?>" target="_blank" rel="noopener" class="konx-btn konx-btn-sm konx-btn-outline" title="LinkedIn"><?php esc_html_e( 'LinkedIn', 'konx-affiliate-dashboard' ); ?></a>
+				<a href="mailto:?subject=<?php echo $share_email; ?>&body=<?php echo $share_text; ?>%20<?php echo $share_url; ?>" class="konx-btn konx-btn-sm konx-btn-outline" title="Email"><?php esc_html_e( 'Email', 'konx-affiliate-dashboard' ); ?></a>
+			</div>
+		</div>
 	</div>
 
 	<!-- Financial Activity Tabs -->

@@ -215,6 +215,10 @@ function konx_affiliate_init() {
 		Konx_Help_Center::init();
 		Konx_System_Status::init();
 		Konx_Export_Manager::init();
+		Konx_Activity_Log_Page::init();
+		Konx_Notification_Center::init();
+		Konx_Setup_Wizard::init();
+		Konx_Financial_Audit::init();
 	}
 }
 add_action( 'plugins_loaded', 'konx_affiliate_init' );
