@@ -238,6 +238,28 @@ class Konx_Settings_Page {
 					</div>
 				</div>
 
+				<!-- Data Removal -->
+				<div class="konx-form-card" style="border-color:#d63638;">
+					<h2 style="color:#d63638;"><?php esc_html_e( 'Data Removal on Uninstall', 'konx-affiliate-dashboard' ); ?></h2>
+					<table class="form-table">
+						<tr>
+							<th><?php esc_html_e( 'Delete Data', 'konx-affiliate-dashboard' ); ?></th>
+							<td>
+								<label>
+									<input type="checkbox" name="remove_all_data" value="1" <?php checked( get_option( 'konx_remove_all_data', false ) ); ?>>
+									<?php esc_html_e( 'Delete all affiliate data when this plugin is deleted', 'konx-affiliate-dashboard' ); ?>
+								</label>
+								<p class="description" style="color:#d63638;">
+									<?php esc_html_e( 'When checked, deleting the plugin will permanently remove all database tables, commissions, wallet history, affiliate profiles, and user data. This cannot be undone.', 'konx-affiliate-dashboard' ); ?>
+								</p>
+								<p class="description">
+									<?php esc_html_e( 'When unchecked (default), all data is preserved even if the plugin is deleted. You can reinstall later without losing anything.', 'konx-affiliate-dashboard' ); ?>
+								</p>
+							</td>
+						</tr>
+					</table>
+				</div>
+
 				<?php submit_button( __( 'Save All Settings', 'konx-affiliate-dashboard' ) ); ?>
 			</form>
 		</div>
@@ -301,6 +323,9 @@ class Konx_Settings_Page {
 			$referral['dedup_hours'] = absint( $_POST['dedup_hours'] ) ?: 24;
 		}
 		update_option( self::OPT_REFERRAL, $referral );
+
+		// --- Data Removal Setting ---
+		update_option( 'konx_remove_all_data', ! empty( $_POST['remove_all_data'] ) );
 
 		self::set_feedback( 'success', __( 'Settings saved.', 'konx-affiliate-dashboard' ) );
 		wp_safe_redirect( admin_url( 'admin.php?page=konx-settings' ) );
