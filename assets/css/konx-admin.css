@@ -200,6 +200,39 @@
 }
 
 /* ================================================================
+ * Activity Feed
+ * ============================================================= */
+.konx-activity-feed {
+	max-height: 400px;
+	overflow-y: auto;
+}
+
+.konx-activity-item {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+	padding: 10px 0;
+	border-bottom: 1px solid var(--konx-border-light);
+	font-size: 13px;
+}
+
+.konx-activity-item:last-child {
+	border-bottom: none;
+}
+
+.konx-activity-item .dashicons {
+	flex-shrink: 0;
+	margin-top: 1px;
+}
+
+.konx-activity-item small {
+	display: block;
+	color: var(--konx-text-secondary);
+	font-size: 11px;
+	margin-top: 2px;
+}
+
+/* ================================================================
  * Empty States
  * ============================================================= */
 .konx-empty-state {

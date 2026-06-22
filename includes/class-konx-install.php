@@ -26,9 +26,84 @@ class Konx_Install {
 		self::seed_commission_rules();
 		self::generate_ip_hash_salt();
 		Konx_Admin_Fees::schedule_cron();
+		self::create_default_pages();
 
 		update_option( 'konx_affiliate_version', KONX_AFFILIATE_VERSION );
 		update_option( 'konx_affiliate_db_version', KONX_AFFILIATE_DB_VERSION );
+
+		// Trigger setup wizard on first activation.
+		if ( class_exists( 'Konx_Setup_Wizard' ) ) {
+			Konx_Setup_Wizard::set_activation_redirect();
+		}
+	}
+
+	/**
+	 * Create default registration and dashboard pages on activation.
+	 *
+	 * Only creates pages if they don't already exist. Stores page IDs
+	 * in options so other parts of the plugin can reference them.
+	 */
+	private static function create_default_pages() {
+		global $wpdb;
+
+		// Registration page.
+		$reg_page_id = get_option( 'konx_registration_page_id' );
+		if ( ! $reg_page_id || ! get_post( $reg_page_id ) ) {
+			// Check if a page with the shortcode already exists.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$existing = $wpdb->get_var(
+				"SELECT ID FROM {$wpdb->posts} WHERE post_type = 'page' AND post_status = 'publish' AND post_content LIKE '%[konx_affiliate_register]%' LIMIT 1"
+			);
+
+			if ( $existing ) {
+				$reg_page_id = (int) $existing;
+			} else {
+				$reg_page_id = wp_insert_post( array(
+					'post_title'   => __( 'Affiliate Registration', 'konx-affiliate-dashboard' ),
+					'post_content' => '[konx_affiliate_register]',
+					'post_status'  => 'publish',
+					'post_type'    => 'page',
+					'post_author'  => 1,
+				) );
+
+				if ( $reg_page_id && ! is_wp_error( $reg_page_id ) ) {
+					update_post_meta( $reg_page_id, '_wp_page_template', 'elementor_header_footer' );
+				}
+			}
+
+			if ( $reg_page_id && ! is_wp_error( $reg_page_id ) ) {
+				update_option( 'konx_registration_page_id', $reg_page_id );
+			}
+		}
+
+		// Dashboard page.
+		$dash_page_id = get_option( 'konx_dashboard_page_id' );
+		if ( ! $dash_page_id || ! get_post( $dash_page_id ) ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$existing = $wpdb->get_var(
+				"SELECT ID FROM {$wpdb->posts} WHERE post_type = 'page' AND post_status = 'publish' AND post_content LIKE '%[konx_affiliate_dashboard]%' LIMIT 1"
+			);
+
+			if ( $existing ) {
+				$dash_page_id = (int) $existing;
+			} else {
+				$dash_page_id = wp_insert_post( array(
+					'post_title'   => __( 'Affiliate Dashboard', 'konx-affiliate-dashboard' ),
+					'post_content' => '[konx_affiliate_dashboard]',
+					'post_status'  => 'publish',
+					'post_type'    => 'page',
+					'post_author'  => 1,
+				) );
+
+				if ( $dash_page_id && ! is_wp_error( $dash_page_id ) ) {
+					update_post_meta( $dash_page_id, '_wp_page_template', 'elementor_header_footer' );
+				}
+			}
+
+			if ( $dash_page_id && ! is_wp_error( $dash_page_id ) ) {
+				update_option( 'konx_dashboard_page_id', $dash_page_id );
+			}
+		}
 	}
 
 	/**

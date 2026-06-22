@@ -60,7 +60,7 @@ class Konx_Admin_Product_Mapping {
 
 		<div class="wrap">
 			<div class="konx-page-header">
-				<h1><?php esc_html_e( 'Product Mapping', 'konx-affiliate-dashboard' ); ?></h1>
+				<h1><?php esc_html_e( 'Product Mapping', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'product_mapping' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></h1>
 			</div>
 			<p><?php esc_html_e( 'Map WooCommerce products to commission categories. Search products by name or enter an ID directly.', 'konx-affiliate-dashboard' ); ?></p>
 

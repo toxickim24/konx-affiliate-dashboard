@@ -192,9 +192,9 @@ class Konx_System_Status {
 
 		// bcmath.
 		$checks[] = array(
-			'label'  => __( 'PHP bcmath Extension', 'konx-affiliate-dashboard' ),
+			'label'  => __( 'Financial Precision', 'konx-affiliate-dashboard' ),
 			'status' => function_exists( 'bcadd' ) ? 'ok' : 'warning',
-			'value'  => function_exists( 'bcadd' ) ? __( 'Available', 'konx-affiliate-dashboard' ) : __( 'Not available (float fallback used)', 'konx-affiliate-dashboard' ),
+			'value'  => function_exists( 'bcadd' ) ? __( 'High precision (bcmath enabled)', 'konx-affiliate-dashboard' ) : __( 'Standard precision. Ask your hosting provider to enable the PHP bcmath extension for exact calculations.', 'konx-affiliate-dashboard' ),
 		);
 
 		return $checks;

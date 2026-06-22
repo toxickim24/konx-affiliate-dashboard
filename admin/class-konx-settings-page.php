@@ -106,7 +106,7 @@ class Konx_Settings_Page {
 
 				<!-- Commission Rates -->
 				<div class="konx-form-card">
-					<h2><?php esc_html_e( 'Commission Rates (%)', 'konx-affiliate-dashboard' ); ?></h2>
+					<h2><?php esc_html_e( 'Commission Rates (%)', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'commission_rate' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></h2>
 					<p class="description"><?php esc_html_e( 'One-time commission rates for pack purchases. Enter as percentage (e.g., 40 for 40%).', 'konx-affiliate-dashboard' ); ?></p>
 					<div class="konx-table-wrap">
 						<table class="widefat fixed striped" style="max-width:700px;margin-top:12px;">
@@ -145,7 +145,7 @@ class Konx_Settings_Page {
 				<div class="konx-grid-2">
 					<!-- Recurring Commission -->
 					<div class="konx-form-card">
-						<h2><?php esc_html_e( 'Recurring Commission', 'konx-affiliate-dashboard' ); ?></h2>
+						<h2><?php esc_html_e( 'Recurring Commission', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'recurring_commission' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></h2>
 						<p class="description"><?php esc_html_e( 'Applied to subscription renewals. Same rate for all affiliate types.', 'konx-affiliate-dashboard' ); ?></p>
 						<table class="form-table">
 							<tr>
@@ -161,7 +161,7 @@ class Konx_Settings_Page {
 
 					<!-- Withdrawal Settings -->
 					<div class="konx-form-card">
-						<h2><?php esc_html_e( 'Withdrawal Settings', 'konx-affiliate-dashboard' ); ?></h2>
+						<h2><?php esc_html_e( 'Withdrawal Settings', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'min_withdrawal' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></h2>
 						<table class="form-table">
 							<tr>
 								<th><label for="min_withdrawal"><?php esc_html_e( 'Minimum ($)', 'konx-affiliate-dashboard' ); ?></label></th>
@@ -178,7 +178,7 @@ class Konx_Settings_Page {
 				<div class="konx-grid-2">
 					<!-- Admin Fees -->
 					<div class="konx-form-card">
-						<h2><?php esc_html_e( 'Monthly Admin Fees ($)', 'konx-affiliate-dashboard' ); ?></h2>
+						<h2><?php esc_html_e( 'Monthly Admin Fees ($)', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'admin_fee' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></h2>
 						<p class="description"><?php esc_html_e( 'Leave blank to use the default.', 'konx-affiliate-dashboard' ); ?></p>
 						<table class="form-table">
 							<?php foreach ( self::$affiliate_types as $aff_type => $aff_label ) : ?>
@@ -205,35 +205,59 @@ class Konx_Settings_Page {
 
 					<!-- Referral Settings -->
 					<div class="konx-form-card">
-						<h2><?php esc_html_e( 'Referral Settings', 'konx-affiliate-dashboard' ); ?></h2>
+						<h2><?php esc_html_e( 'Referral Tracking', 'konx-affiliate-dashboard' ); ?></h2>
 						<table class="form-table">
 							<tr>
-								<th><label for="cookie_days"><?php esc_html_e( 'Cookie (days)', 'konx-affiliate-dashboard' ); ?></label></th>
+								<th><label for="cookie_days"><?php esc_html_e( 'Remember Referral For', 'konx-affiliate-dashboard' ); ?></label></th>
 								<td>
 									<input type="number" id="cookie_days" name="cookie_days"
 										value="<?php echo esc_attr( $cookie_days ); ?>"
-										min="1" max="365" step="1" style="width:80px;">
+										min="1" max="365" step="1" style="width:80px;"> <?php esc_html_e( 'days', 'konx-affiliate-dashboard' ); ?>
+									<p class="description"><?php esc_html_e( 'How long to track a referral after someone clicks an affiliate link.', 'konx-affiliate-dashboard' ); ?></p>
 								</td>
 							</tr>
 							<tr>
-								<th><label for="ref_param"><?php esc_html_e( 'URL Param', 'konx-affiliate-dashboard' ); ?></label></th>
+								<th><label for="ref_param"><?php esc_html_e( 'Link Parameter', 'konx-affiliate-dashboard' ); ?></label></th>
 								<td>
 									<input type="text" id="ref_param" name="ref_param"
 										value="<?php echo esc_attr( $ref_param ); ?>"
 										style="width:80px;">
-									<p class="description"><?php esc_html_e( 'e.g., "ref" for ?ref=CODE', 'konx-affiliate-dashboard' ); ?></p>
+									<p class="description"><?php esc_html_e( 'The URL parameter used in referral links. Default: "ref" (yoursite.com/?ref=CODE). Most users should not change this.', 'konx-affiliate-dashboard' ); ?></p>
 								</td>
 							</tr>
 							<tr>
-								<th><label for="dedup_hours"><?php esc_html_e( 'Dedup (hours)', 'konx-affiliate-dashboard' ); ?></label></th>
+								<th><label for="dedup_hours"><?php esc_html_e( 'Ignore Repeat Clicks Within', 'konx-affiliate-dashboard' ); ?></label></th>
 								<td>
 									<input type="number" id="dedup_hours" name="dedup_hours"
 										value="<?php echo esc_attr( $dedup_hours ); ?>"
-										min="1" max="168" step="1" style="width:80px;">
+										min="1" max="168" step="1" style="width:80px;"> <?php esc_html_e( 'hours', 'konx-affiliate-dashboard' ); ?>
+									<p class="description"><?php esc_html_e( 'Multiple clicks from the same person within this window are counted as one click.', 'konx-affiliate-dashboard' ); ?></p>
 								</td>
 							</tr>
 						</table>
 					</div>
+				</div>
+
+				<!-- Data Removal -->
+				<div class="konx-form-card" style="border-color:#d63638;">
+					<h2 style="color:#d63638;"><?php esc_html_e( 'Data Removal on Uninstall', 'konx-affiliate-dashboard' ); ?></h2>
+					<table class="form-table">
+						<tr>
+							<th><?php esc_html_e( 'Delete Data', 'konx-affiliate-dashboard' ); ?></th>
+							<td>
+								<label>
+									<input type="checkbox" name="remove_all_data" value="1" <?php checked( get_option( 'konx_remove_all_data', false ) ); ?>>
+									<?php esc_html_e( 'Delete all affiliate data when this plugin is deleted', 'konx-affiliate-dashboard' ); ?>
+								</label>
+								<p class="description" style="color:#d63638;">
+									<?php esc_html_e( 'When checked, deleting the plugin will permanently remove all database tables, commissions, wallet history, affiliate profiles, and user data. This cannot be undone.', 'konx-affiliate-dashboard' ); ?>
+								</p>
+								<p class="description">
+									<?php esc_html_e( 'When unchecked (default), all data is preserved even if the plugin is deleted. You can reinstall later without losing anything.', 'konx-affiliate-dashboard' ); ?>
+								</p>
+							</td>
+						</tr>
+					</table>
 				</div>
 
 				<?php submit_button( __( 'Save All Settings', 'konx-affiliate-dashboard' ) ); ?>
@@ -299,6 +323,9 @@ class Konx_Settings_Page {
 			$referral['dedup_hours'] = absint( $_POST['dedup_hours'] ) ?: 24;
 		}
 		update_option( self::OPT_REFERRAL, $referral );
+
+		// --- Data Removal Setting ---
+		update_option( 'konx_remove_all_data', ! empty( $_POST['remove_all_data'] ) );
 
 		self::set_feedback( 'success', __( 'Settings saved.', 'konx-affiliate-dashboard' ) );
 		wp_safe_redirect( admin_url( 'admin.php?page=konx-settings' ) );

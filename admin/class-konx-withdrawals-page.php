@@ -79,7 +79,7 @@ class Konx_Withdrawals_Page {
 		?>
 		<div class="wrap">
 			<div class="konx-page-header">
-				<h1><?php esc_html_e( 'Withdrawal Requests', 'konx-affiliate-dashboard' ); ?></h1>
+				<h1><?php esc_html_e( 'Withdrawal Requests', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'withdrawal_status' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></h1>
 			</div>
 
 			<?php if ( $feedback ) : ?>

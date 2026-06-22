@@ -72,14 +72,14 @@ foreach ( $cron_hooks as $hook ) {
 }
 
 // -----------------------------------------------------------------------
-// DESTRUCTIVE: Only runs if KONX_REMOVE_ALL_DATA === true (strict).
-//
-// This gate requires the constant to be boolean true. It does NOT
-// trigger for false, 0, '', null, 'false', 'yes', 1, or '1'.
-// The admin must add this exact line to wp-config.php:
-//   define( 'KONX_REMOVE_ALL_DATA', true );
+// DESTRUCTIVE: Only runs if either:
+//   1. KONX_REMOVE_ALL_DATA constant is true in wp-config.php, OR
+//   2. Admin checked "Delete all data" in Settings page
 // -----------------------------------------------------------------------
-if ( defined( 'KONX_REMOVE_ALL_DATA' ) && true === KONX_REMOVE_ALL_DATA ) {
+$remove_via_constant = ( defined( 'KONX_REMOVE_ALL_DATA' ) && true === KONX_REMOVE_ALL_DATA );
+$remove_via_setting  = (bool) get_option( 'konx_remove_all_data', false );
+
+if ( $remove_via_constant || $remove_via_setting ) {
 
 	// Delete plugin options.
 	delete_option( 'konx_affiliate_version' );
@@ -89,6 +89,9 @@ if ( defined( 'KONX_REMOVE_ALL_DATA' ) && true === KONX_REMOVE_ALL_DATA ) {
 	delete_option( 'konx_admin_fee_settings' );
 	delete_option( 'konx_referral_settings' );
 	delete_option( 'konx_recurring_commission_rate' );
+	delete_option( 'konx_registration_page_id' );
+	delete_option( 'konx_dashboard_page_id' );
+	delete_option( 'konx_remove_all_data' );
 
 	// Drop custom tables.
 	$tables = array(

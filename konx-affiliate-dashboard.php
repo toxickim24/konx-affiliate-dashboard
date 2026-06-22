@@ -3,7 +3,7 @@
  * Plugin Name:       KonX Affiliate Dashboard
  * Plugin URI:        https://github.com/toxickim24/konx-affiliate-dashboard
  * Description:       A custom affiliate dashboard for WooCommerce.
- * Version:           1.1.0
+ * Version:           1.2.0
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            toxickim24
@@ -26,7 +26,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-define( 'KONX_AFFILIATE_VERSION', '1.1.0' );
+define( 'KONX_AFFILIATE_VERSION', '1.2.0' );
 define( 'KONX_AFFILIATE_DB_VERSION', '1.0.0' );
 define( 'KONX_AFFILIATE_PLUGIN_FILE', __FILE__ );
 define( 'KONX_AFFILIATE_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -215,6 +215,10 @@ function konx_affiliate_init() {
 		Konx_Help_Center::init();
 		Konx_System_Status::init();
 		Konx_Export_Manager::init();
+		Konx_Activity_Log_Page::init();
+		Konx_Notification_Center::init();
+		Konx_Setup_Wizard::init();
+		Konx_Financial_Audit::init();
 	}
 }
 add_action( 'plugins_loaded', 'konx_affiliate_init' );
@@ -236,5 +240,20 @@ function konx_enqueue_admin_assets( $hook ) {
 		KONX_AFFILIATE_PLUGIN_URL . 'assets/css/konx-admin.css',
 		array(),
 		KONX_AFFILIATE_VERSION
+	);
+
+	wp_enqueue_style(
+		'konx-tooltips',
+		KONX_AFFILIATE_PLUGIN_URL . 'assets/css/konx-tooltips.css',
+		array(),
+		KONX_AFFILIATE_VERSION
+	);
+
+	wp_enqueue_script(
+		'konx-tooltips',
+		KONX_AFFILIATE_PLUGIN_URL . 'assets/js/konx-tooltips.js',
+		array(),
+		KONX_AFFILIATE_VERSION,
+		true
 	);
 }
