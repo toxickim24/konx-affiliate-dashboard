@@ -70,7 +70,7 @@ class Konx_Admin_Fees_Page {
 		?>
 		<div class="wrap">
 			<div class="konx-page-header">
-				<h1><?php esc_html_e( 'Admin Fees', 'konx-affiliate-dashboard' ); ?></h1>
+				<h1><?php esc_html_e( 'Admin Fees', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'admin_fee' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></h1>
 			</div>
 
 			<?php if ( $feedback ) : ?>

@@ -145,7 +145,7 @@ class Konx_Settings_Page {
 				<div class="konx-grid-2">
 					<!-- Recurring Commission -->
 					<div class="konx-form-card">
-						<h2><?php esc_html_e( 'Recurring Commission', 'konx-affiliate-dashboard' ); ?></h2>
+						<h2><?php esc_html_e( 'Recurring Commission', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'recurring_commission' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></h2>
 						<p class="description"><?php esc_html_e( 'Applied to subscription renewals. Same rate for all affiliate types.', 'konx-affiliate-dashboard' ); ?></p>
 						<table class="form-table">
 							<tr>
@@ -161,7 +161,7 @@ class Konx_Settings_Page {
 
 					<!-- Withdrawal Settings -->
 					<div class="konx-form-card">
-						<h2><?php esc_html_e( 'Withdrawal Settings', 'konx-affiliate-dashboard' ); ?></h2>
+						<h2><?php esc_html_e( 'Withdrawal Settings', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'min_withdrawal' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></h2>
 						<table class="form-table">
 							<tr>
 								<th><label for="min_withdrawal"><?php esc_html_e( 'Minimum ($)', 'konx-affiliate-dashboard' ); ?></label></th>
@@ -178,7 +178,7 @@ class Konx_Settings_Page {
 				<div class="konx-grid-2">
 					<!-- Admin Fees -->
 					<div class="konx-form-card">
-						<h2><?php esc_html_e( 'Monthly Admin Fees ($)', 'konx-affiliate-dashboard' ); ?></h2>
+						<h2><?php esc_html_e( 'Monthly Admin Fees ($)', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'admin_fee' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></h2>
 						<p class="description"><?php esc_html_e( 'Leave blank to use the default.', 'konx-affiliate-dashboard' ); ?></p>
 						<table class="form-table">
 							<?php foreach ( self::$affiliate_types as $aff_type => $aff_label ) : ?>

@@ -384,7 +384,7 @@ class Konx_Affiliates_Page {
 
 			<!-- Manual Balance Adjustment -->
 			<div class="konx-card" style="margin-bottom:20px;">
-				<h2><?php esc_html_e( 'Manual Balance Adjustment', 'konx-affiliate-dashboard' ); ?></h2>
+				<h2><?php esc_html_e( 'Manual Balance Adjustment', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'balance_adjustment' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></h2>
 				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">
 					<input type="hidden" name="action" value="konx_adjust_balance">
 					<input type="hidden" name="affiliate_id" value="<?php echo esc_attr( $aff->id ); ?>">
