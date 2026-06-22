@@ -25,14 +25,14 @@ class Konx_Referral_Tracker {
 	const COOKIE_NAME = 'konx_ref';
 
 	/**
-	 * Default cookie lifetime in days.
+	 * Default cookie lifetime in days (used if settings not configured).
 	 */
-	const COOKIE_DAYS = 30;
+	const DEFAULT_COOKIE_DAYS = 30;
 
 	/**
-	 * Duplicate-click suppression window in seconds (24 hours).
+	 * Default duplicate-click suppression window in seconds (used if settings not configured).
 	 */
-	const DEDUP_WINDOW = 86400;
+	const DEFAULT_DEDUP_WINDOW = 86400;
 
 	/**
 	 * Register WordPress hooks.
@@ -56,11 +56,13 @@ class Konx_Referral_Tracker {
 			return;
 		}
 
-		if ( ! isset( $_GET['ref'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$ref_param = Konx_Settings_Page::get_ref_param();
+
+		if ( ! isset( $_GET[ $ref_param ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			return;
 		}
 
-		$code = strtoupper( sanitize_text_field( wp_unslash( $_GET['ref'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$code = strtoupper( sanitize_text_field( wp_unslash( $_GET[ $ref_param ] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		if ( empty( $code ) || strlen( $code ) > 12 ) {
 			return;
 		}
@@ -97,7 +99,8 @@ class Konx_Referral_Tracker {
 			return;
 		}
 
-		$expiry = time() + ( self::COOKIE_DAYS * DAY_IN_SECONDS );
+		$cookie_days = Konx_Settings_Page::get_cookie_days();
+		$expiry      = time() + ( $cookie_days * DAY_IN_SECONDS );
 
 		setcookie(
 			self::COOKIE_NAME,
@@ -170,7 +173,8 @@ class Konx_Referral_Tracker {
 
 		$ip_hash = self::hash_ip();
 		$table   = $wpdb->prefix . 'konx_referral_clicks';
-		$cutoff  = gmdate( 'Y-m-d H:i:s', time() - self::DEDUP_WINDOW );
+		$dedup_window = Konx_Settings_Page::get_dedup_window();
+		$cutoff       = gmdate( 'Y-m-d H:i:s', time() - $dedup_window );
 
 		// Duplicate suppression: same IP + affiliate within 24 hours.
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching

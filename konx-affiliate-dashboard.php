@@ -207,6 +207,7 @@ function konx_affiliate_init() {
 		Konx_Admin_Fees_Page::init();
 		Konx_Withdrawals_Page::init();
 		Konx_Reports_Page::init();
+		Konx_Settings_Page::init();
 	}
 }
 add_action( 'plugins_loaded', 'konx_affiliate_init' );

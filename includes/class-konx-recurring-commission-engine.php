@@ -25,9 +25,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Konx_Recurring_Commission_Engine {
 
 	/**
-	 * The flat recurring commission rate for all affiliate types.
+	 * Default recurring commission rate (used if settings not configured).
 	 */
-	const RECURRING_RATE = '0.1000';
+	const DEFAULT_RECURRING_RATE = '0.1000';
 
 	/**
 	 * Register hooks only if YITH Subscription is active.
@@ -207,7 +207,7 @@ class Konx_Recurring_Commission_Engine {
 			return false;
 		}
 
-		$rate = self::RECURRING_RATE;
+		$rate = Konx_Settings_Page::get_recurring_rate();
 
 		if ( function_exists( 'bcmul' ) ) {
 			$commission_amount = bcmul( $product_price, $rate, 2 );
