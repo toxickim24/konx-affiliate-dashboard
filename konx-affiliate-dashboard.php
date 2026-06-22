@@ -182,5 +182,10 @@ function konx_affiliate_init() {
 	if ( $installed_db_version !== KONX_AFFILIATE_DB_VERSION ) {
 		Konx_Install::maybe_upgrade( $installed_db_version );
 	}
+
+	// Initialize admin pages.
+	if ( is_admin() ) {
+		Konx_Admin_Product_Mapping::init();
+	}
 }
 add_action( 'plugins_loaded', 'konx_affiliate_init' );
