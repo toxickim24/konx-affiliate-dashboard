@@ -146,6 +146,54 @@ Deactivate and reactivate plugin after rollback.
 - Roll back plugin code
 - Reactivate plugin
 
+## Uninstall Behavior
+
+### Default Uninstall (Plugin Deletion)
+
+When the plugin is deleted via WordPress admin **without** the
+`KONX_REMOVE_ALL_DATA` constant:
+
+| Action | Performed |
+|---|---|
+| Remove custom roles (5) | Yes |
+| Remove capabilities from administrator (8) | Yes |
+| Clear cron events | Yes |
+| Drop database tables | **No** |
+| Delete plugin options | **No** |
+| Delete IP hash salt | **No** |
+| Delete user meta | **No** |
+| Delete order meta | **No** |
+
+All financial data (commissions, wallet, withdrawals, milestones,
+affiliates) is **preserved**. Reinstalling the plugin restores
+full functionality.
+
+### Destructive Uninstall
+
+To permanently delete all data, add to `wp-config.php` **before**
+deleting the plugin:
+
+```php
+define( 'KONX_REMOVE_ALL_DATA', true );
+```
+
+This must be **boolean `true`** (strict check with `===`). The
+following values do NOT trigger destructive cleanup:
+
+| Value | Triggers Cleanup |
+|---|---|
+| `true` | **Yes** |
+| `false` | No |
+| `1` | No |
+| `'1'` | No |
+| `'true'` | No |
+| `'yes'` | No |
+| `0` | No |
+| `null` | No |
+| Not defined | No |
+
+After destructive uninstall, remove the constant from `wp-config.php`.
+
 ## Version Tagging
 
 | Version | Milestone |

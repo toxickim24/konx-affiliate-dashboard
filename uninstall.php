@@ -2,12 +2,21 @@
 /**
  * Fired when the plugin is deleted via WordPress admin.
  *
- * Drops all custom tables, removes plugin options, cleans user meta,
- * and removes custom roles/capabilities.
+ * DEFAULT behavior (safe):
+ *   - Removes custom roles and capabilities
+ *   - Clears scheduled cron events
+ *   - Does NOT delete database tables
+ *   - Does NOT delete financial records
+ *   - Does NOT delete plugin options or IP hash salt
+ *   - Does NOT delete user meta or order meta
  *
- * Safety gate: define KONX_REMOVE_ALL_DATA as true in wp-config.php
- * to enable destructive cleanup. Without it, only options and roles
- * are removed; tables and user meta are preserved.
+ * DESTRUCTIVE behavior (requires explicit opt-in):
+ *   - Only runs if KONX_REMOVE_ALL_DATA is defined as boolean true
+ *     in wp-config.php: define( 'KONX_REMOVE_ALL_DATA', true );
+ *   - Drops all 11 custom database tables
+ *   - Deletes all plugin options
+ *   - Deletes all user meta with konx_ prefix
+ *   - Deletes all order meta with _konx_ prefix
  *
  * @package KonxAffiliateDashboard
  */
@@ -18,16 +27,10 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 
 global $wpdb;
 
-// Remove plugin options.
-delete_option( 'konx_affiliate_version' );
-delete_option( 'konx_affiliate_db_version' );
-delete_option( 'konx_ip_hash_salt' );
-delete_option( 'konx_affiliate_settings' );
-delete_option( 'konx_admin_fee_settings' );
-delete_option( 'konx_referral_settings' );
-delete_option( 'konx_recurring_commission_rate' );
-
-// Remove custom roles.
+// -----------------------------------------------------------------------
+// ALWAYS: Remove custom roles (safe — users retain slug in usermeta,
+// capabilities restored on reinstall when add_role() is called again).
+// -----------------------------------------------------------------------
 $roles = array(
 	'konx_business_affiliate',
 	'konx_referral_affiliate',
@@ -57,7 +60,9 @@ if ( $admin ) {
 	}
 }
 
-// Clear scheduled events.
+// -----------------------------------------------------------------------
+// ALWAYS: Clear scheduled cron events.
+// -----------------------------------------------------------------------
 $cron_hooks = array( 'konx_daily_overdue_fee_check', 'konx_click_data_cleanup' );
 foreach ( $cron_hooks as $hook ) {
 	$ts = wp_next_scheduled( $hook );
@@ -66,9 +71,24 @@ foreach ( $cron_hooks as $hook ) {
 	}
 }
 
-// Destructive cleanup: tables and user meta.
-// Only runs if KONX_REMOVE_ALL_DATA is explicitly defined as true.
-if ( defined( 'KONX_REMOVE_ALL_DATA' ) && KONX_REMOVE_ALL_DATA ) {
+// -----------------------------------------------------------------------
+// DESTRUCTIVE: Only runs if KONX_REMOVE_ALL_DATA === true (strict).
+//
+// This gate requires the constant to be boolean true. It does NOT
+// trigger for false, 0, '', null, 'false', 'yes', 1, or '1'.
+// The admin must add this exact line to wp-config.php:
+//   define( 'KONX_REMOVE_ALL_DATA', true );
+// -----------------------------------------------------------------------
+if ( defined( 'KONX_REMOVE_ALL_DATA' ) && true === KONX_REMOVE_ALL_DATA ) {
+
+	// Delete plugin options.
+	delete_option( 'konx_affiliate_version' );
+	delete_option( 'konx_affiliate_db_version' );
+	delete_option( 'konx_ip_hash_salt' );
+	delete_option( 'konx_affiliate_settings' );
+	delete_option( 'konx_admin_fee_settings' );
+	delete_option( 'konx_referral_settings' );
+	delete_option( 'konx_recurring_commission_rate' );
 
 	// Drop custom tables.
 	$tables = array(
@@ -92,10 +112,10 @@ if ( defined( 'KONX_REMOVE_ALL_DATA' ) && KONX_REMOVE_ALL_DATA ) {
 	// Remove user meta.
 	$wpdb->query( "DELETE FROM {$wpdb->usermeta} WHERE meta_key LIKE 'konx\_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
-	// Remove order meta (WooCommerce HPOS-compatible fallback).
+	// Remove order meta (classic post-based storage).
 	$wpdb->query( "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE '\_konx\_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
-	// If WooCommerce HPOS orders meta table exists, clean it too.
+	// Remove order meta (WooCommerce HPOS storage, if table exists).
 	$hpos_meta = $wpdb->prefix . 'wc_orders_meta';
 	if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $hpos_meta ) ) === $hpos_meta ) {
 		$wpdb->query( "DELETE FROM {$hpos_meta} WHERE meta_key LIKE '\_konx\_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
