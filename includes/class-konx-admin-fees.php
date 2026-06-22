@@ -183,7 +183,90 @@ class Konx_Admin_Fees {
 	 * @return bool|WP_Error True on success, WP_Error on failure.
 	 */
 	public static function mark_paid( $fee_id, $notes = '' ) {
-		return self::update_status( $fee_id, self::STATUS_PAID, $notes );
+		$fee = self::get_fee( $fee_id );
+		$result = self::update_status( $fee_id, self::STATUS_PAID, $notes );
+
+		// After marking paid, check if affiliate now has zero unpaid fees
+		// and release any blocked commissions.
+		if ( true === $result && $fee && self::can_affiliate_earn( (int) $fee->affiliate_id ) ) {
+			self::release_blocked_commissions( (int) $fee->affiliate_id );
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Release all blocked commissions for an affiliate.
+	 *
+	 * Changes status from 'blocked' to 'approved' and credits the wallet
+	 * for each commission that was previously held due to unpaid admin fees.
+	 *
+	 * @param int $affiliate_id Affiliate ID.
+	 * @return int Number of commissions released.
+	 */
+	public static function release_blocked_commissions( $affiliate_id ) {
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'konx_commissions';
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$blocked = $wpdb->get_results( $wpdb->prepare(
+			"SELECT * FROM {$table} WHERE affiliate_id = %d AND status = 'blocked' AND blocked_reason = 'unpaid_admin_fee'",
+			absint( $affiliate_id )
+		) );
+
+		if ( empty( $blocked ) ) {
+			return 0;
+		}
+
+		$released = 0;
+		$now      = current_time( 'mysql', true );
+
+		foreach ( $blocked as $comm ) {
+			// Update commission status.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$wpdb->update(
+				$table,
+				array( 'status' => 'approved', 'blocked_reason' => null, 'updated_at' => $now ),
+				array( 'id' => $comm->id ),
+				array( '%s', '%s', '%s' ),
+				array( '%d' )
+			);
+
+			// Credit wallet.
+			$amount = number_format( (float) $comm->commission_amount, 2, '.', '' );
+			$entry_type = 'recurring' === $comm->commission_type
+				? Konx_Wallet::TYPE_RECURRING_COMMISSION
+				: Konx_Wallet::TYPE_COMMISSION;
+
+			$ledger_id = Konx_Wallet::credit(
+				(int) $comm->affiliate_id,
+				$amount,
+				$entry_type,
+				Konx_Wallet::REF_COMMISSION,
+				(int) $comm->id,
+				sprintf( 'Released blocked commission #%d after fee payment.', $comm->id )
+			);
+
+			if ( ! is_wp_error( $ledger_id ) ) {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+				$wpdb->update( $table, array( 'ledger_entry_id' => (int) $ledger_id ), array( 'id' => $comm->id ), array( '%d' ), array( '%d' ) );
+				$released++;
+			}
+		}
+
+		if ( $released > 0 ) {
+			self::log_audit(
+				'commissions_unblocked',
+				'affiliate',
+				$affiliate_id,
+				null,
+				(string) $released,
+				sprintf( 'Released %d blocked commission(s) after admin fee payment.', $released )
+			);
+		}
+
+		return $released;
 	}
 
 	/**

@@ -350,6 +350,60 @@ $fee       = $data['fee_status'];
 		</div>
 	<?php endif; ?>
 
+	<!-- Commission Rate Card -->
+	<div class="konx-section">
+		<h3><?php esc_html_e( 'Your Commission Rates', 'konx-affiliate-dashboard' ); ?></h3>
+		<p class="konx-muted" style="margin-bottom:12px;"><?php esc_html_e( 'These are the rates you earn based on your affiliate type.', 'konx-affiliate-dashboard' ); ?></p>
+		<?php
+		global $wpdb;
+		$rules_table = $wpdb->prefix . 'konx_commission_rules';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$my_rules = $wpdb->get_results( $wpdb->prepare(
+			"SELECT product_type, commission_type, rate FROM {$rules_table} WHERE affiliate_type = %s AND is_active = 1 ORDER BY commission_type, product_type",
+			$aff->affiliate_type
+		) );
+		?>
+		<?php if ( ! empty( $my_rules ) ) : ?>
+			<div class="konx-table-wrap">
+				<table class="konx-table">
+					<thead>
+						<tr>
+							<th scope="col"><?php esc_html_e( 'Product', 'konx-affiliate-dashboard' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Type', 'konx-affiliate-dashboard' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Your Rate', 'konx-affiliate-dashboard' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $my_rules as $rule ) : ?>
+							<tr>
+								<td><?php echo esc_html( ucwords( str_replace( '_', ' ', $rule->product_type ) ) ); ?></td>
+								<td><?php echo esc_html( 'recurring' === $rule->commission_type ? __( 'Recurring', 'konx-affiliate-dashboard' ) : __( 'One-Time', 'konx-affiliate-dashboard' ) ); ?></td>
+								<td><strong><?php echo esc_html( number_format( (float) $rule->rate * 100, 0 ) ); ?>%</strong></td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			</div>
+		<?php endif; ?>
+	</div>
+
+	<!-- Profile Settings -->
+	<div class="konx-section">
+		<h3><?php esc_html_e( 'Profile Settings', 'konx-affiliate-dashboard' ); ?></h3>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="konx_update_profile">
+			<?php wp_nonce_field( 'konx_update_profile_' . $aff->id, 'konx_profile_nonce' ); ?>
+
+			<div class="konx-form-row">
+				<label for="konx-profile-email"><?php esc_html_e( 'Wise Payment Email', 'konx-affiliate-dashboard' ); ?></label>
+				<input type="email" id="konx-profile-email" name="payment_email" value="<?php echo esc_attr( $aff->payment_email ); ?>" style="max-width:400px;">
+				<small><?php esc_html_e( 'This is the email address where your Wise payouts will be sent.', 'konx-affiliate-dashboard' ); ?></small>
+			</div>
+
+			<button type="submit" class="konx-btn konx-btn-primary"><?php esc_html_e( 'Save Profile', 'konx-affiliate-dashboard' ); ?></button>
+		</form>
+	</div>
+
 </div>
 
 <!-- Tab Switching & Copy Script -->

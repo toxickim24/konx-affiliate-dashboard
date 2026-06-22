@@ -26,8 +26,38 @@ class Konx_Dashboard {
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'maybe_enqueue_assets' ) );
 		add_action( 'admin_post_konx_affiliate_withdrawal', array( __CLASS__, 'handle_withdrawal_form' ) );
 		add_action( 'admin_post_nopriv_konx_affiliate_withdrawal', '__return_false' );
+		add_action( 'admin_post_konx_update_profile', array( __CLASS__, 'handle_profile_update' ) );
 		// No automatic redirect — affiliates see a banner on my-account instead.
 		add_action( 'woocommerce_before_my_account', array( __CLASS__, 'render_myaccount_dashboard_link' ) );
+	}
+
+	/**
+	 * Handle affiliate profile update.
+	 */
+	public static function handle_profile_update() {
+		if ( ! is_user_logged_in() ) {
+			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
+		}
+
+		$user_id   = get_current_user_id();
+		$affiliate = Konx_Affiliate_Manager::get_affiliate_by_user( $user_id );
+		if ( ! $affiliate ) {
+			wp_die( esc_html__( 'Affiliate not found.', 'konx-affiliate-dashboard' ) );
+		}
+
+		check_admin_referer( 'konx_update_profile_' . $affiliate->id, 'konx_profile_nonce' );
+
+		$redirect = isset( $_POST['_wp_http_referer'] ) ? esc_url_raw( wp_unslash( $_POST['_wp_http_referer'] ) ) : home_url( '/' );
+
+		// Update payment email.
+		$payment_email = isset( $_POST['payment_email'] ) ? sanitize_email( wp_unslash( $_POST['payment_email'] ) ) : '';
+		if ( ! empty( $payment_email ) ) {
+			Konx_Affiliate_Manager::update_payment_email( (int) $affiliate->id, $payment_email );
+		}
+
+		self::set_feedback( (int) $affiliate->id, 'success', __( 'Profile updated.', 'konx-affiliate-dashboard' ) );
+		wp_safe_redirect( $redirect );
+		exit;
 	}
 
 	/**
