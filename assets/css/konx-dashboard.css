@@ -1,0 +1,341 @@
+/**
+ * KonX Affiliate Dashboard — Frontend Styles
+ *
+ * Designed to work cleanly inside Elementor pages and most
+ * WordPress themes. Uses the .konx-dashboard wrapper to scope
+ * all styles and avoid theme conflicts.
+ */
+
+/* ----------------------------------------------------------------
+ * Layout
+ * -------------------------------------------------------------- */
+.konx-dashboard {
+	max-width: 900px;
+	margin: 0 auto;
+	font-size: 15px;
+	line-height: 1.6;
+	color: #1d2327;
+}
+
+.konx-topbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 16px;
+	padding: 10px 16px;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 6px;
+	font-size: 14px;
+}
+
+.konx-topbar-links {
+	display: flex;
+	gap: 8px;
+}
+
+.konx-section {
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 6px;
+	padding: 20px 24px;
+	margin-bottom: 20px;
+}
+
+.konx-section h3 {
+	margin: 0 0 16px;
+	padding: 0 0 10px;
+	border-bottom: 1px solid #f0f0f1;
+	font-size: 17px;
+	font-weight: 600;
+}
+
+.konx-section h4 {
+	margin: 20px 0 10px;
+	font-size: 15px;
+	font-weight: 600;
+}
+
+/* ----------------------------------------------------------------
+ * Notices
+ * -------------------------------------------------------------- */
+.konx-notice,
+.konx-dash-notice {
+	padding: 12px 16px;
+	border-radius: 4px;
+	margin-bottom: 16px;
+	font-size: 14px;
+}
+
+.konx-notice-success {
+	background: #edfaef;
+	border: 1px solid #00a32a;
+	color: #00450b;
+}
+
+.konx-notice-error {
+	background: #fcf0f1;
+	border: 1px solid #d63638;
+	color: #8a1114;
+}
+
+.konx-notice-info {
+	background: #f0f6fc;
+	border: 1px solid #72aee6;
+	color: #1d4e89;
+}
+
+.konx-dash-notice {
+	background: #f0f6fc;
+	border: 1px solid #72aee6;
+	color: #1d4e89;
+	text-align: center;
+	padding: 24px;
+}
+
+.konx-dash-notice a {
+	font-weight: 600;
+}
+
+/* ----------------------------------------------------------------
+ * Stats Grid
+ * -------------------------------------------------------------- */
+.konx-stats-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 16px;
+}
+
+.konx-stat {
+	background: #f6f7f7;
+	border-radius: 6px;
+	padding: 16px;
+	text-align: center;
+}
+
+.konx-stat-value {
+	display: block;
+	font-size: 24px;
+	font-weight: 700;
+	color: #1d2327;
+	margin-bottom: 4px;
+}
+
+.konx-stat-label {
+	display: block;
+	font-size: 13px;
+	color: #646970;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+/* ----------------------------------------------------------------
+ * Progress Bar
+ * -------------------------------------------------------------- */
+.konx-progress-wrap {
+	margin-bottom: 8px;
+}
+
+.konx-progress-bar {
+	background: #dcdcde;
+	border-radius: 10px;
+	height: 20px;
+	overflow: hidden;
+	margin-bottom: 8px;
+}
+
+.konx-progress-fill {
+	background: #2271b1;
+	height: 100%;
+	border-radius: 10px;
+	transition: width 0.4s ease;
+	min-width: 2px;
+}
+
+.konx-progress-text {
+	font-size: 14px;
+	margin: 0 0 4px;
+}
+
+.konx-progress-meta {
+	font-size: 13px;
+	color: #646970;
+	margin: 0;
+}
+
+/* ----------------------------------------------------------------
+ * Tables
+ * -------------------------------------------------------------- */
+.konx-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 14px;
+}
+
+.konx-table th,
+.konx-table td {
+	padding: 8px 10px;
+	text-align: left;
+	border-bottom: 1px solid #f0f0f1;
+}
+
+.konx-table th {
+	font-weight: 600;
+	color: #1d2327;
+	background: #f6f7f7;
+	white-space: nowrap;
+}
+
+.konx-table tbody tr:hover {
+	background: #f6f7f7;
+}
+
+.konx-info-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.konx-info-table td {
+	padding: 6px 0;
+	border-bottom: 1px solid #f0f0f1;
+}
+
+.konx-info-table td:first-child {
+	font-weight: 600;
+	width: 160px;
+	color: #646970;
+}
+
+/* ----------------------------------------------------------------
+ * Referral Input
+ * -------------------------------------------------------------- */
+.konx-referral-input {
+	width: 320px;
+	max-width: 100%;
+	padding: 6px 10px;
+	border: 1px solid #8c8f94;
+	border-radius: 4px;
+	font-size: 14px;
+	background: #f6f7f7;
+	margin-right: 8px;
+}
+
+/* ----------------------------------------------------------------
+ * Forms
+ * -------------------------------------------------------------- */
+.konx-withdrawal-form {
+	max-width: 480px;
+}
+
+.konx-form-row {
+	margin-bottom: 14px;
+}
+
+.konx-form-row label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 4px;
+	font-size: 14px;
+}
+
+.konx-form-row input,
+.konx-form-row select,
+.konx-form-row textarea {
+	width: 100%;
+	padding: 8px 10px;
+	border: 1px solid #8c8f94;
+	border-radius: 4px;
+	font-size: 14px;
+	box-sizing: border-box;
+}
+
+.konx-form-row small {
+	display: block;
+	margin-top: 4px;
+	color: #646970;
+	font-size: 12px;
+}
+
+/* ----------------------------------------------------------------
+ * Buttons
+ * -------------------------------------------------------------- */
+.konx-btn {
+	display: inline-block;
+	padding: 8px 16px;
+	border: none;
+	border-radius: 4px;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	text-decoration: none;
+	line-height: 1.4;
+}
+
+.konx-btn-primary {
+	background: #2271b1;
+	color: #fff;
+}
+
+.konx-btn-primary:hover {
+	background: #135e96;
+}
+
+.konx-btn-sm {
+	padding: 4px 10px;
+	font-size: 13px;
+}
+
+/* ----------------------------------------------------------------
+ * Utility
+ * -------------------------------------------------------------- */
+.konx-muted {
+	color: #646970;
+	font-size: 13px;
+}
+
+code {
+	background: #f0f0f1;
+	padding: 2px 6px;
+	border-radius: 3px;
+	font-size: 13px;
+}
+
+/* ----------------------------------------------------------------
+ * Responsive
+ * -------------------------------------------------------------- */
+@media (max-width: 600px) {
+	.konx-dashboard {
+		font-size: 14px;
+	}
+
+	.konx-section {
+		padding: 16px;
+	}
+
+	.konx-stats-grid {
+		grid-template-columns: repeat(2, 1fr);
+		gap: 10px;
+	}
+
+	.konx-stat-value {
+		font-size: 20px;
+	}
+
+	.konx-table {
+		font-size: 12px;
+	}
+
+	.konx-table th,
+	.konx-table td {
+		padding: 6px 4px;
+	}
+
+	.konx-info-table td:first-child {
+		width: 120px;
+	}
+
+	.konx-referral-input {
+		width: 100%;
+		margin-bottom: 8px;
+	}
+}
