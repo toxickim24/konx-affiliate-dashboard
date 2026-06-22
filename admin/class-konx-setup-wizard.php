@@ -114,20 +114,27 @@ class Konx_Setup_Wizard {
 		$mappings  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}konx_product_map" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rules     = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}konx_commission_rules" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
+		$reg_url  = $reg_page ? get_permalink( $reg_page ) : '';
+		$dash_url = $dash_page ? get_permalink( $dash_page ) : '';
+
 		return array(
 			array(
-				'title'       => __( 'Create Registration Page', 'konx-affiliate-dashboard' ),
-				'description' => __( 'Create a page with the [konx_affiliate_register] shortcode.', 'konx-affiliate-dashboard' ),
+				'title'       => __( 'Registration Page', 'konx-affiliate-dashboard' ),
+				'description' => $reg_page
+					? sprintf( __( 'Created automatically: %s', 'konx-affiliate-dashboard' ), $reg_url )
+					: __( 'A registration page will be created automatically on activation.', 'konx-affiliate-dashboard' ),
 				'done'        => (bool) $reg_page,
-				'url'         => admin_url( 'post-new.php?post_type=page' ),
-				'action'      => __( 'Create Page', 'konx-affiliate-dashboard' ),
+				'url'         => $reg_url ?: admin_url( 'post-new.php?post_type=page' ),
+				'action'      => $reg_page ? __( 'View Page', 'konx-affiliate-dashboard' ) : __( 'Create Page', 'konx-affiliate-dashboard' ),
 			),
 			array(
-				'title'       => __( 'Create Dashboard Page', 'konx-affiliate-dashboard' ),
-				'description' => __( 'Create a page with the [konx_affiliate_dashboard] shortcode.', 'konx-affiliate-dashboard' ),
+				'title'       => __( 'Dashboard Page', 'konx-affiliate-dashboard' ),
+				'description' => $dash_page
+					? sprintf( __( 'Created automatically: %s', 'konx-affiliate-dashboard' ), $dash_url )
+					: __( 'A dashboard page will be created automatically on activation.', 'konx-affiliate-dashboard' ),
 				'done'        => (bool) $dash_page,
-				'url'         => admin_url( 'post-new.php?post_type=page' ),
-				'action'      => __( 'Create Page', 'konx-affiliate-dashboard' ),
+				'url'         => $dash_url ?: admin_url( 'post-new.php?post_type=page' ),
+				'action'      => $dash_page ? __( 'View Page', 'konx-affiliate-dashboard' ) : __( 'Create Page', 'konx-affiliate-dashboard' ),
 			),
 			array(
 				'title'       => __( 'Map WooCommerce Products', 'konx-affiliate-dashboard' ),

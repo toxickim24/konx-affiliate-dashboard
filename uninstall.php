@@ -89,6 +89,8 @@ if ( defined( 'KONX_REMOVE_ALL_DATA' ) && true === KONX_REMOVE_ALL_DATA ) {
 	delete_option( 'konx_admin_fee_settings' );
 	delete_option( 'konx_referral_settings' );
 	delete_option( 'konx_recurring_commission_rate' );
+	delete_option( 'konx_registration_page_id' );
+	delete_option( 'konx_dashboard_page_id' );
 
 	// Drop custom tables.
 	$tables = array(
