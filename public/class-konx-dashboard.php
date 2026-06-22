@@ -26,6 +26,50 @@ class Konx_Dashboard {
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'maybe_enqueue_assets' ) );
 		add_action( 'admin_post_konx_affiliate_withdrawal', array( __CLASS__, 'handle_withdrawal_form' ) );
 		add_action( 'admin_post_nopriv_konx_affiliate_withdrawal', '__return_false' );
+		add_action( 'template_redirect', array( __CLASS__, 'redirect_affiliate_from_myaccount' ) );
+	}
+
+	/**
+	 * Redirect affiliate users from WooCommerce my-account to the affiliate dashboard.
+	 *
+	 * Regular WooCommerce customers are not affected.
+	 */
+	public static function redirect_affiliate_from_myaccount() {
+		if ( ! is_user_logged_in() || ! function_exists( 'wc_get_page_id' ) ) {
+			return;
+		}
+
+		$myaccount_id = wc_get_page_id( 'myaccount' );
+		if ( ! is_page( $myaccount_id ) ) {
+			return;
+		}
+
+		$affiliate = Konx_Affiliate_Manager::get_affiliate_by_user( get_current_user_id() );
+		if ( ! $affiliate ) {
+			return; // Not an affiliate — let WooCommerce handle it.
+		}
+
+		$dashboard_url = get_permalink( self::get_dashboard_page_id() );
+		if ( $dashboard_url ) {
+			wp_safe_redirect( $dashboard_url );
+			exit;
+		}
+	}
+
+	/**
+	 * Find the page containing the [konx_affiliate_dashboard] shortcode.
+	 *
+	 * @return int Page ID, or 0.
+	 */
+	private static function get_dashboard_page_id() {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$page_id = $wpdb->get_var(
+			"SELECT ID FROM {$wpdb->posts} WHERE post_type = 'page' AND post_status = 'publish' AND post_content LIKE '%[konx_affiliate_dashboard]%' LIMIT 1"
+		);
+
+		return $page_id ? (int) $page_id : 0;
 	}
 
 	// ------------------------------------------------------------------

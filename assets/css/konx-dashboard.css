@@ -17,6 +17,18 @@
 	color: #1d2327;
 }
 
+.konx-topbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 16px;
+	padding: 10px 16px;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 6px;
+	font-size: 14px;
+}
+
 .konx-section {
 	background: #fff;
 	border: 1px solid #dcdcde;

@@ -31,6 +31,14 @@ $fee       = $data['fee_status'];
 
 <div class="konx-dashboard">
 
+	<!-- Top Bar -->
+	<div class="konx-topbar">
+		<span><?php printf( esc_html__( 'Welcome, %s', 'konx-affiliate-dashboard' ), esc_html( wp_get_current_user()->display_name ) ); ?></span>
+		<a href="<?php echo esc_url( wp_logout_url( home_url( '/' ) ) ); ?>" class="konx-btn konx-btn-sm">
+			<?php esc_html_e( 'Log Out', 'konx-affiliate-dashboard' ); ?>
+		</a>
+	</div>
+
 	<?php if ( $data['feedback'] ) : ?>
 		<div class="konx-notice konx-notice-<?php echo esc_attr( $data['feedback']['type'] ); ?>">
 			<?php echo esc_html( $data['feedback']['message'] ); ?>
