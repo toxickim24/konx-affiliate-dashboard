@@ -205,31 +205,33 @@ class Konx_Settings_Page {
 
 					<!-- Referral Settings -->
 					<div class="konx-form-card">
-						<h2><?php esc_html_e( 'Referral Settings', 'konx-affiliate-dashboard' ); ?></h2>
+						<h2><?php esc_html_e( 'Referral Tracking', 'konx-affiliate-dashboard' ); ?></h2>
 						<table class="form-table">
 							<tr>
-								<th><label for="cookie_days"><?php esc_html_e( 'Cookie (days)', 'konx-affiliate-dashboard' ); ?></label></th>
+								<th><label for="cookie_days"><?php esc_html_e( 'Remember Referral For', 'konx-affiliate-dashboard' ); ?></label></th>
 								<td>
 									<input type="number" id="cookie_days" name="cookie_days"
 										value="<?php echo esc_attr( $cookie_days ); ?>"
-										min="1" max="365" step="1" style="width:80px;">
+										min="1" max="365" step="1" style="width:80px;"> <?php esc_html_e( 'days', 'konx-affiliate-dashboard' ); ?>
+									<p class="description"><?php esc_html_e( 'How long to track a referral after someone clicks an affiliate link.', 'konx-affiliate-dashboard' ); ?></p>
 								</td>
 							</tr>
 							<tr>
-								<th><label for="ref_param"><?php esc_html_e( 'URL Param', 'konx-affiliate-dashboard' ); ?></label></th>
+								<th><label for="ref_param"><?php esc_html_e( 'Link Parameter', 'konx-affiliate-dashboard' ); ?></label></th>
 								<td>
 									<input type="text" id="ref_param" name="ref_param"
 										value="<?php echo esc_attr( $ref_param ); ?>"
 										style="width:80px;">
-									<p class="description"><?php esc_html_e( 'e.g., "ref" for ?ref=CODE', 'konx-affiliate-dashboard' ); ?></p>
+									<p class="description"><?php esc_html_e( 'The URL parameter used in referral links. Default: "ref" (yoursite.com/?ref=CODE). Most users should not change this.', 'konx-affiliate-dashboard' ); ?></p>
 								</td>
 							</tr>
 							<tr>
-								<th><label for="dedup_hours"><?php esc_html_e( 'Dedup (hours)', 'konx-affiliate-dashboard' ); ?></label></th>
+								<th><label for="dedup_hours"><?php esc_html_e( 'Ignore Repeat Clicks Within', 'konx-affiliate-dashboard' ); ?></label></th>
 								<td>
 									<input type="number" id="dedup_hours" name="dedup_hours"
 										value="<?php echo esc_attr( $dedup_hours ); ?>"
-										min="1" max="168" step="1" style="width:80px;">
+										min="1" max="168" step="1" style="width:80px;"> <?php esc_html_e( 'hours', 'konx-affiliate-dashboard' ); ?>
+									<p class="description"><?php esc_html_e( 'Multiple clicks from the same person within this window are counted as one click.', 'konx-affiliate-dashboard' ); ?></p>
 								</td>
 							</tr>
 						</table>

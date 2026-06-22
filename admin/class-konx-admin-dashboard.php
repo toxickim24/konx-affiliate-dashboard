@@ -202,13 +202,13 @@ class Konx_Admin_Dashboard {
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		return array(
 			array( 'value' => (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$aff}" ), 'label' => __( 'Total Affiliates', 'konx-affiliate-dashboard' ) ),
-			array( 'value' => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$aff} WHERE status = %s", 'active' ) ), 'label' => __( 'Active', 'konx-affiliate-dashboard' ) ),
+			array( 'value' => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$aff} WHERE status = %s", 'active' ) ), 'label' => __( 'Active Affiliates', 'konx-affiliate-dashboard' ) ),
 			array( 'value' => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wd} WHERE status IN (%s,%s)", 'pending', 'approved' ) ), 'label' => __( 'Pending Withdrawals', 'konx-affiliate-dashboard' ) ),
-			array( 'value' => '$' . number_format( (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(commission_amount),0) FROM {$comm} WHERE status = %s AND commission_type = %s", 'approved', 'one_time' ) ), 2 ), 'label' => __( 'One-Time', 'konx-affiliate-dashboard' ) ),
-			array( 'value' => '$' . number_format( (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(commission_amount),0) FROM {$comm} WHERE status = %s AND commission_type = %s", 'approved', 'recurring' ) ), 2 ), 'label' => __( 'Recurring', 'konx-affiliate-dashboard' ) ),
-			array( 'value' => '$' . number_format( (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(bonus_amount),0) FROM {$mile} WHERE status = %s", 'approved' ) ), 2 ), 'label' => __( 'Bonuses', 'konx-affiliate-dashboard' ) ),
-			array( 'value' => '$' . number_format( (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(amount),0) FROM {$wd} WHERE status = %s", 'completed' ) ), 2 ), 'label' => __( 'Paid Out', 'konx-affiliate-dashboard' ) ),
-			array( 'value' => '$' . number_format( (float) $wpdb->get_var( "SELECT COALESCE(SUM(cached_balance),0) FROM {$aff}" ), 2 ), 'label' => __( 'Wallet Balance', 'konx-affiliate-dashboard' ) ),
+			array( 'value' => '$' . number_format( (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(commission_amount),0) FROM {$comm} WHERE status = %s AND commission_type = %s", 'approved', 'one_time' ) ), 2 ), 'label' => __( 'Pack Commissions', 'konx-affiliate-dashboard' ) ),
+			array( 'value' => '$' . number_format( (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(commission_amount),0) FROM {$comm} WHERE status = %s AND commission_type = %s", 'approved', 'recurring' ) ), 2 ), 'label' => __( 'Subscription Commissions', 'konx-affiliate-dashboard' ) ),
+			array( 'value' => '$' . number_format( (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(bonus_amount),0) FROM {$mile} WHERE status = %s", 'approved' ) ), 2 ), 'label' => __( 'Milestone Bonuses', 'konx-affiliate-dashboard' ) ),
+			array( 'value' => '$' . number_format( (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(amount),0) FROM {$wd} WHERE status = %s", 'completed' ) ), 2 ), 'label' => __( 'Total Paid to Affiliates', 'konx-affiliate-dashboard' ) ),
+			array( 'value' => '$' . number_format( (float) $wpdb->get_var( "SELECT COALESCE(SUM(cached_balance),0) FROM {$aff}" ), 2 ), 'label' => __( 'Unpaid Balances', 'konx-affiliate-dashboard' ) ),
 		);
 		// phpcs:enable
 	}

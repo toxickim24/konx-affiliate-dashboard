@@ -101,7 +101,7 @@ $fee       = $data['fee_status'];
 		</div>
 		<div class="konx-stat">
 			<span class="konx-stat-value">$<?php echo esc_html( $balance['available_balance'] ); ?></span>
-			<span class="konx-stat-label"><?php esc_html_e( 'Available', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'available_balance' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
+			<span class="konx-stat-label"><?php esc_html_e( 'Available Balance', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'available_balance' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
 		</div>
 		<div class="konx-stat">
 			<span class="konx-stat-value">$<?php echo esc_html( $balance['total_withdrawals'] ); ?></span>
@@ -117,7 +117,7 @@ $fee       = $data['fee_status'];
 		</div>
 		<div class="konx-stat">
 			<span class="konx-stat-value">$<?php echo esc_html( $data['estimated_bonus'] ); ?></span>
-			<span class="konx-stat-label"><?php esc_html_e( 'Est. Next Bonus', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'milestone_bonus' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
+			<span class="konx-stat-label"><?php esc_html_e( 'Estimated Next Bonus', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'milestone_bonus' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
 		</div>
 	</div>
 
@@ -129,8 +129,9 @@ $fee       = $data['fee_status'];
 		</div>
 		<p class="konx-progress-text">
 			<strong><?php echo esc_html( $milestone['sales_in_block'] ); ?></strong> / <?php echo esc_html( Konx_Milestone_Bonus::BLOCK_SIZE ); ?>
-			<?php esc_html_e( 'sales toward milestone at', 'konx-affiliate-dashboard' ); ?> <strong><?php echo esc_html( $milestone['next_milestone_at'] ); ?></strong>
+			<?php esc_html_e( 'sales toward your next milestone bonus', 'konx-affiliate-dashboard' ); ?>
 		</p>
+		<p class="konx-muted"><?php esc_html_e( 'Every 100 sales, you earn a bonus equal to all commissions from that block of 100 sales!', 'konx-affiliate-dashboard' ); ?></p>
 		<?php if ( ! empty( $data['bonuses']['entries'] ) ) : ?>
 			<h4><?php esc_html_e( 'Bonus History', 'konx-affiliate-dashboard' ); ?></h4>
 			<div class="konx-table-wrap">
@@ -163,6 +164,7 @@ $fee       = $data['fee_status'];
 	<!-- Referral Tools -->
 	<div class="konx-section">
 		<h3><?php esc_html_e( 'Referral Tools', 'konx-affiliate-dashboard' ); ?></h3>
+		<p class="konx-muted" style="margin-bottom:14px;"><?php esc_html_e( 'Share your unique referral link. When someone clicks it and makes a purchase, you earn a commission automatically.', 'konx-affiliate-dashboard' ); ?></p>
 		<div class="konx-referral-tools">
 			<div class="konx-referral-box">
 				<label><?php esc_html_e( 'Referral Code', 'konx-affiliate-dashboard' ); ?></label>
@@ -296,7 +298,8 @@ $fee       = $data['fee_status'];
 						<textarea id="konx-wd-notes" name="notes" rows="2"></textarea>
 					</div>
 
-					<button type="submit" class="konx-btn konx-btn-primary"><?php esc_html_e( 'Submit Withdrawal Request', 'konx-affiliate-dashboard' ); ?></button>
+					<button type="submit" class="konx-btn konx-btn-primary" onclick="return confirm('<?php echo esc_js( sprintf( __( 'Submit withdrawal request for the entered amount? This cannot be undone.', 'konx-affiliate-dashboard' ) ) ); ?>');"><?php esc_html_e( 'Submit Withdrawal Request', 'konx-affiliate-dashboard' ); ?></button>
+					<p class="konx-muted" style="margin-top:10px;"><?php esc_html_e( 'Withdrawals are typically processed within 3-5 business days via Wise.', 'konx-affiliate-dashboard' ); ?></p>
 				</form>
 			<?php endif; ?>
 
@@ -332,6 +335,7 @@ $fee       = $data['fee_status'];
 	<?php if ( $fee['unpaid_count'] > 0 || $fee['overdue_count'] > 0 ) : ?>
 		<div class="konx-section">
 			<h3><?php esc_html_e( 'Admin Fee Status', 'konx-affiliate-dashboard' ); ?></h3>
+			<p class="konx-muted" style="margin-bottom:12px;"><?php esc_html_e( 'Admin fees are monthly program maintenance fees. Your commission earnings are paused until all fees are paid. Contact the administrator to make a payment.', 'konx-affiliate-dashboard' ); ?></p>
 			<div class="konx-stats-grid" style="grid-template-columns: repeat(3, 1fr);">
 				<div class="konx-stat">
 					<span class="konx-stat-value"><?php echo esc_html( $fee['unpaid_count'] ); ?></span>
