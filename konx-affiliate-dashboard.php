@@ -218,9 +218,10 @@ function konx_affiliate_init() {
 		Konx_Settings_Page::init();
 		Konx_Admin_Product_Mapping::init();
 
-		// Tools page (tabs: notifications, activity log, financial audit, system status, help).
+		// Tools page (tabs: notifications, activity log, financial audit, api keys, system status, help).
 		Konx_Tools_Page::init();
 		Konx_Notification_Center::init();
+		Konx_Api_Keys_Page::init();
 
 		// Utilities (no menu, handlers only).
 		Konx_Export_Manager::init();

@@ -17,8 +17,17 @@ Every request must include an API key via the `X-KONX-API-Key` header.
 X-KONX-API-Key: konx_aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890abcd
 ```
 
-API keys are generated in the KonX Affiliates admin. The plaintext key
-is shown once at creation. Only a SHA-256 hash is stored.
+API keys are generated in the KonX Affiliates admin under
+**Tools > API Keys**. The plaintext key is shown once at creation
+and must be copied immediately. Only a SHA-256 hash is stored.
+
+### Generating a Key
+
+1. Go to **KonX Affiliates > Tools > API Keys** tab.
+2. Enter a name (e.g. "PowerOf10 Production").
+3. Click **Generate Key**.
+4. Copy the displayed key immediately — it cannot be retrieved later.
+5. Add the key to PowerOf10's `.env` file as `KONX_WORLD_API_KEY`.
 
 ## Request Payload
 

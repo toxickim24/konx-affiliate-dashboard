@@ -83,7 +83,7 @@ The upgrade is idempotent — safe to run multiple times.
 
 ### Key Lifecycle
 
-1. Admin generates key via Settings page (future UI).
+1. Admin generates key via Tools > API Keys tab.
 2. `Konx_Api_Helper::generate_key()` returns plaintext + stores hash.
 3. PowerOf10 stores the plaintext key in its `.env` file.
 4. On each API request, the key is sent via `X-KONX-API-Key` header.

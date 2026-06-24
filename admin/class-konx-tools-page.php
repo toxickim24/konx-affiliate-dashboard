@@ -44,11 +44,12 @@ class Konx_Tools_Page {
 		$active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( wp_unslash( $_GET['tab'] ) ) : 'notifications';
 
 		$tabs = array(
-			'notifications'  => __( 'Notifications', 'konx-affiliate-dashboard' ),
-			'activity-log'   => __( 'Activity Log', 'konx-affiliate-dashboard' ),
+			'notifications'   => __( 'Notifications', 'konx-affiliate-dashboard' ),
+			'activity-log'    => __( 'Activity Log', 'konx-affiliate-dashboard' ),
 			'financial-audit' => __( 'Financial Audit', 'konx-affiliate-dashboard' ),
-			'system-status'  => __( 'System Status', 'konx-affiliate-dashboard' ),
-			'help'           => __( 'Help Center', 'konx-affiliate-dashboard' ),
+			'api-keys'        => __( 'API Keys', 'konx-affiliate-dashboard' ),
+			'system-status'   => __( 'System Status', 'konx-affiliate-dashboard' ),
+			'help'            => __( 'Help Center', 'konx-affiliate-dashboard' ),
 		);
 
 		?>
@@ -78,6 +79,9 @@ class Konx_Tools_Page {
 						break;
 					case 'financial-audit':
 						Konx_Financial_Audit::render_content();
+						break;
+					case 'api-keys':
+						Konx_Api_Keys_Page::render_content();
 						break;
 					case 'system-status':
 						Konx_System_Status::render_content();
