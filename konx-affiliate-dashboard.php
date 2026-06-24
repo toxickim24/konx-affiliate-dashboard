@@ -183,6 +183,9 @@ function konx_affiliate_init() {
 		Konx_Install::maybe_upgrade( $installed_db_version );
 	}
 
+	// REST API (loads on all requests — REST is not admin).
+	Konx_REST_API::init();
+
 	// Referral tracking and order attribution (frontend + AJAX).
 	Konx_Referral_Tracker::init();
 	Konx_Order_Attribution::init();
