@@ -414,7 +414,6 @@ class Konx_Dashboard {
 	public static function format_type( $type ) {
 		$labels = array(
 			'business'        => __( 'Business Affiliate', 'konx-affiliate-dashboard' ),
-			'referral'        => __( 'Referral Affiliate', 'konx-affiliate-dashboard' ),
 			'team_agent'      => __( 'Team Agent', 'konx-affiliate-dashboard' ),
 			'marketing_agent' => __( 'Marketing Agent', 'konx-affiliate-dashboard' ),
 			'sales_agent'     => __( 'Sales Agent', 'konx-affiliate-dashboard' ),
