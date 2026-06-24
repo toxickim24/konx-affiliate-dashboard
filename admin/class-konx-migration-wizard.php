@@ -28,6 +28,7 @@ class Konx_Migration_Wizard {
 	 */
 	private static $steps = array(
 		'welcome'     => 'Welcome',
+		'validation'  => 'Validation',
 		'health'      => 'Health Check',
 		'types'       => 'Type Mapping',
 		'sponsors'    => 'Sponsors',
@@ -43,6 +44,8 @@ class Konx_Migration_Wizard {
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
 		add_action( 'admin_post_konx_migration_scan', array( __CLASS__, 'handle_scan' ) );
+		add_action( 'admin_post_konx_migration_run_validation', array( __CLASS__, 'handle_run_validation' ) );
+		add_action( 'admin_post_konx_migration_export_validation', array( __CLASS__, 'handle_export_validation' ) );
 		add_action( 'admin_post_konx_migration_dry_run', array( __CLASS__, 'handle_dry_run' ) );
 		add_action( 'admin_post_konx_migration_approve', array( __CLASS__, 'handle_approve' ) );
 	}
@@ -97,6 +100,9 @@ class Konx_Migration_Wizard {
 			<div style="max-width:960px;margin-top:20px;">
 				<?php
 				switch ( $step ) {
+					case 'validation':
+						self::render_validation( $state );
+						break;
 					case 'health':
 						self::render_health( $state );
 						break;
@@ -223,7 +229,143 @@ class Konx_Migration_Wizard {
 	}
 
 	// ------------------------------------------------------------------
-	// Step 2: Health Check
+	// Step 2: Validation Preview
+	// ------------------------------------------------------------------
+
+	/**
+	 * Render the Validation Preview step.
+	 *
+	 * @param array $state Migration state.
+	 */
+	private static function render_validation( $state ) {
+		$vr = isset( $state['validation_results'] ) ? $state['validation_results'] : null;
+
+		if ( ! isset( $state['scan'] ) ) {
+			self::render_no_scan();
+			return;
+		}
+
+		?>
+		<h2><?php esc_html_e( 'Validation Preview', 'konx-affiliate-dashboard' ); ?></h2>
+		<p class="description"><?php esc_html_e( 'Validate every record against business rules before proceeding. No data is written.', 'konx-affiliate-dashboard' ); ?></p>
+
+		<?php if ( ! $vr ) : ?>
+			<div class="konx-card" style="margin:16px 0;">
+				<p><?php esc_html_e( 'Run validation to check all records for errors and warnings.', 'konx-affiliate-dashboard' ); ?></p>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<input type="hidden" name="action" value="konx_migration_run_validation">
+					<?php wp_nonce_field( 'konx_migration_run_validation', 'konx_val_nonce' ); ?>
+					<?php submit_button( __( 'Run Validation', 'konx-affiliate-dashboard' ), 'primary', '', false ); ?>
+				</form>
+			</div>
+		<?php else : ?>
+			<?php $s = $vr['summary']; ?>
+
+			<!-- Summary Cards -->
+			<div class="konx-stats-grid" style="margin:16px 0;">
+				<?php self::stat_card( $s['total'], __( 'Total Records', 'konx-affiliate-dashboard' ), '#2271b1' ); ?>
+				<?php self::stat_card( $s['valid'], __( 'Valid', 'konx-affiliate-dashboard' ), '#00a32a' ); ?>
+				<?php self::stat_card( $s['with_warning'], __( 'Warnings', 'konx-affiliate-dashboard' ), $s['with_warning'] > 0 ? '#dba617' : '#00a32a' ); ?>
+				<?php self::stat_card( $s['with_error'], __( 'Errors', 'konx-affiliate-dashboard' ), $s['with_error'] > 0 ? '#d63638' : '#00a32a' ); ?>
+			</div>
+
+			<?php if ( 0 === $s['error_count'] && 0 === $s['warning_count'] ) : ?>
+				<div class="notice notice-success inline" style="margin:0 0 16px;">
+					<p><?php esc_html_e( 'All records passed validation. No issues detected.', 'konx-affiliate-dashboard' ); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( $s['error_count'] > 0 ) : ?>
+				<div class="notice notice-error inline" style="margin:0 0 16px;">
+					<p><?php printf( esc_html__( '%d error(s) found. Records with errors will be skipped during migration.', 'konx-affiliate-dashboard' ), $s['error_count'] ); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<!-- Category Summary -->
+			<?php if ( ! empty( $vr['by_category'] ) ) : ?>
+				<h3><?php esc_html_e( 'Issues by Category', 'konx-affiliate-dashboard' ); ?></h3>
+				<table class="widefat fixed striped" style="max-width:500px;margin-bottom:20px;">
+					<thead><tr>
+						<th><?php esc_html_e( 'Field', 'konx-affiliate-dashboard' ); ?></th>
+						<th style="width:80px;"><?php esc_html_e( 'Errors', 'konx-affiliate-dashboard' ); ?></th>
+						<th style="width:80px;"><?php esc_html_e( 'Warnings', 'konx-affiliate-dashboard' ); ?></th>
+					</tr></thead>
+					<tbody>
+						<?php
+						$field_labels = array(
+							'email' => __( 'Email', 'konx-affiliate-dashboard' ),
+							'team_name' => __( 'Team Name', 'konx-affiliate-dashboard' ),
+							'promotional_title' => __( 'Affiliate Type', 'konx-affiliate-dashboard' ),
+							'referrer_team_name' => __( 'Sponsor', 'konx-affiliate-dashboard' ),
+							'user_fname' => __( 'First Name', 'konx-affiliate-dashboard' ),
+							'user_lname' => __( 'Last Name', 'konx-affiliate-dashboard' ),
+						);
+						foreach ( $vr['by_category'] as $field => $field_issues ) :
+							$errs = count( array_filter( $field_issues, function ( $i ) { return 'error' === $i['severity']; } ) );
+							$warns = count( array_filter( $field_issues, function ( $i ) { return 'warning' === $i['severity']; } ) );
+						?>
+						<tr>
+							<td><strong><?php echo esc_html( $field_labels[ $field ] ?? ucwords( str_replace( '_', ' ', $field ) ) ); ?></strong></td>
+							<td style="color:<?php echo $errs > 0 ? '#d63638' : '#646970'; ?>;"><?php echo esc_html( $errs ); ?></td>
+							<td style="color:<?php echo $warns > 0 ? '#dba617' : '#646970'; ?>;"><?php echo esc_html( $warns ); ?></td>
+						</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
+
+			<!-- Issue Details (first 50) -->
+			<?php if ( ! empty( $vr['issues'] ) ) : ?>
+				<h3><?php esc_html_e( 'Issue Details', 'konx-affiliate-dashboard' ); ?>
+					<span class="description" style="font-weight:normal;margin-left:8px;"><?php printf( esc_html__( 'Showing first %d of %d', 'konx-affiliate-dashboard' ), min( 50, count( $vr['issues'] ) ), count( $vr['issues'] ) ); ?></span>
+				</h3>
+				<div class="konx-table-wrap">
+					<table class="widefat fixed striped" style="font-size:12px;margin-bottom:16px;">
+						<thead><tr>
+							<th style="width:60px;"><?php esc_html_e( 'Row', 'konx-affiliate-dashboard' ); ?></th>
+							<th style="width:80px;"><?php esc_html_e( 'Severity', 'konx-affiliate-dashboard' ); ?></th>
+							<th style="width:100px;"><?php esc_html_e( 'Field', 'konx-affiliate-dashboard' ); ?></th>
+							<th><?php esc_html_e( 'Issue', 'konx-affiliate-dashboard' ); ?></th>
+							<th style="width:150px;"><?php esc_html_e( 'Value', 'konx-affiliate-dashboard' ); ?></th>
+						</tr></thead>
+						<tbody>
+							<?php foreach ( array_slice( $vr['issues'], 0, 50 ) as $issue ) : ?>
+								<tr>
+									<td><?php echo esc_html( $issue['row'] ); ?></td>
+									<td><?php echo wp_kses_post( self::badge( 'error' === $issue['severity'] ? 'error' : 'warning', strtoupper( $issue['severity'] ) ) ); ?></td>
+									<td><?php echo esc_html( $field_labels[ $issue['field'] ] ?? $issue['field'] ); ?></td>
+									<td><?php echo esc_html( $issue['message'] ); ?></td>
+									<td><code style="font-size:11px;"><?php echo esc_html( mb_substr( $issue['value'], 0, 40 ) ); ?></code></td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+			<?php endif; ?>
+
+			<!-- Actions -->
+			<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline;">
+					<input type="hidden" name="action" value="konx_migration_run_validation">
+					<?php wp_nonce_field( 'konx_migration_run_validation', 'konx_val_nonce' ); ?>
+					<button type="submit" class="button"><?php esc_html_e( 'Re-run Validation', 'konx-affiliate-dashboard' ); ?></button>
+				</form>
+				<?php if ( ! empty( $vr['issues'] ) ) : ?>
+					<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=konx_migration_export_validation' ), 'konx_export_validation', 'konx_exp_nonce' ) ); ?>" class="button">
+						<?php esc_html_e( 'Download Validation Report (CSV)', 'konx-affiliate-dashboard' ); ?>
+					</a>
+				<?php endif; ?>
+			</div>
+
+		<?php endif; ?>
+
+		<?php
+		$can_continue = $vr && ( 0 === $vr['summary']['with_error'] || $vr['summary']['valid'] > 0 );
+		self::render_nav( 'welcome', $can_continue ? 'health' : null );
+	}
+
+	// ------------------------------------------------------------------
+	// Step 3: Health Check
 	// ------------------------------------------------------------------
 
 	/**
@@ -275,7 +417,7 @@ class Konx_Migration_Wizard {
 			</tbody>
 		</table>
 
-		<?php self::render_nav( 'welcome', 'types' ); ?>
+		<?php self::render_nav( 'validation', 'types' ); ?>
 		<?php
 	}
 
@@ -787,6 +929,83 @@ class Konx_Migration_Wizard {
 
 		self::set_feedback( 'success', __( 'Scan completed successfully.', 'konx-affiliate-dashboard' ) );
 		wp_safe_redirect( admin_url( 'admin.php?page=konx-migration&step=health' ) );
+		exit;
+	}
+
+	/**
+	 * Handle run validation — validate all source records.
+	 */
+	public static function handle_run_validation() {
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
+		}
+		check_admin_referer( 'konx_migration_run_validation', 'konx_val_nonce' );
+
+		$engine  = new Konx_Migration_Engine();
+
+		// Get source records — use engine method if available, else query DB directly.
+		if ( method_exists( $engine, 'get_source_records' ) ) {
+			$records = $engine->get_source_records();
+		} else {
+			global $wpdb;
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$records = $wpdb->get_results(
+				"SELECT id, user_fname, user_lname, email, user_phone, promotional_title, team_name, referrer_team_name, source, country_code, created_at FROM `powerof10.biz`.users ORDER BY id"
+			);
+		}
+
+		if ( empty( $records ) ) {
+			self::set_feedback( 'error', __( 'No source records available. Run a scan first.', 'konx-affiliate-dashboard' ) );
+			wp_safe_redirect( admin_url( 'admin.php?page=konx-migration' ) );
+			exit;
+		}
+
+		$results = Konx_CSV_Validator::validate( $records );
+
+		$state = get_option( 'konx_migration_state', array() );
+		$state['validation_results'] = $results;
+		$state['validation_at']      = current_time( 'mysql', true );
+		update_option( 'konx_migration_state', $state, false );
+
+		$msg = sprintf(
+			__( 'Validation complete: %d valid, %d warnings, %d errors.', 'konx-affiliate-dashboard' ),
+			$results['summary']['valid'],
+			$results['summary']['with_warning'],
+			$results['summary']['with_error']
+		);
+		self::set_feedback( 0 === $results['summary']['with_error'] ? 'success' : 'warning', $msg );
+		wp_safe_redirect( admin_url( 'admin.php?page=konx-migration&step=validation' ) );
+		exit;
+	}
+
+	/**
+	 * Handle validation report CSV export.
+	 */
+	public static function handle_export_validation() {
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
+		}
+		check_admin_referer( 'konx_export_validation', 'konx_exp_nonce' );
+
+		$state = get_option( 'konx_migration_state', array() );
+		if ( empty( $state['validation_results']['issues'] ) ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=konx-migration&step=validation' ) );
+			exit;
+		}
+
+		$csv_data = Konx_CSV_Validator::export_csv( $state['validation_results']['issues'] );
+		$filename = 'konx-validation-report-' . gmdate( 'Y-m-d-His' ) . '.csv';
+
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename=' . $filename );
+		header( 'Pragma: no-cache' );
+		header( 'Expires: 0' );
+
+		$output = fopen( 'php://output', 'w' );
+		foreach ( $csv_data as $row ) {
+			fputcsv( $output, $row );
+		}
+		fclose( $output );
 		exit;
 	}
 
