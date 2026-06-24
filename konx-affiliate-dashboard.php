@@ -226,6 +226,9 @@ function konx_affiliate_init() {
 		// Utilities (no menu, handlers only).
 		Konx_Export_Manager::init();
 		Konx_Setup_Wizard::init();
+
+		// Migration wizard.
+		Konx_Migration_Wizard::init();
 	}
 }
 add_action( 'plugins_loaded', 'konx_affiliate_init' );
