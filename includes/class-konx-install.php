@@ -31,6 +31,9 @@ class Konx_Install {
 		update_option( 'konx_affiliate_version', KONX_AFFILIATE_VERSION );
 		update_option( 'konx_affiliate_db_version', KONX_AFFILIATE_DB_VERSION );
 
+		// Schedule rewrite flush for My Account endpoint.
+		Konx_My_Account::schedule_flush();
+
 		// Trigger setup wizard on first activation.
 		if ( class_exists( 'Konx_Setup_Wizard' ) ) {
 			Konx_Setup_Wizard::set_activation_redirect();
@@ -127,7 +130,7 @@ class Konx_Install {
 	}
 
 	/**
-	 * Return the CREATE TABLE SQL for all 11 custom tables.
+	 * Return the CREATE TABLE SQL for all 13 custom tables.
 	 *
 	 * @param string $charset_collate The charset/collate string from $wpdb.
 	 * @return array Array of SQL CREATE TABLE statements.
@@ -144,13 +147,15 @@ class Konx_Install {
 		$tables[] = "CREATE TABLE {$table} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 			user_id bigint(20) unsigned NOT NULL,
-			affiliate_type varchar(20) NOT NULL DEFAULT 'referral',
-			referral_code varchar(12) NOT NULL,
+			affiliate_type varchar(20) NOT NULL DEFAULT 'sales_agent',
+			referral_code varchar(50) NOT NULL,
 			status varchar(20) NOT NULL DEFAULT 'active',
 			completed_sales int(10) unsigned NOT NULL DEFAULT 0,
 			cached_balance decimal(12,2) NOT NULL DEFAULT 0.00,
 			parent_affiliate_id bigint(20) unsigned DEFAULT NULL,
 			payment_email varchar(255) DEFAULT NULL,
+			external_id varchar(50) DEFAULT NULL,
+			phone varchar(30) DEFAULT NULL,
 			notes text,
 			registered_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -159,7 +164,8 @@ class Konx_Install {
 			UNIQUE KEY uq_referral_code (referral_code),
 			KEY idx_affiliate_type (affiliate_type),
 			KEY idx_status (status),
-			KEY idx_parent_affiliate (parent_affiliate_id)
+			KEY idx_parent_affiliate (parent_affiliate_id),
+			KEY idx_external_id (external_id)
 		) {$charset_collate};";
 
 		// ---------------------------------------------------------------
@@ -169,7 +175,7 @@ class Konx_Install {
 		$tables[] = "CREATE TABLE {$table} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 			affiliate_id bigint(20) unsigned NOT NULL,
-			referral_code varchar(12) NOT NULL,
+			referral_code varchar(50) NOT NULL,
 			ip_hash varchar(64) NOT NULL,
 			user_agent varchar(500) DEFAULT NULL,
 			landing_url varchar(2048) DEFAULT NULL,
@@ -192,7 +198,7 @@ class Konx_Install {
 			affiliate_id bigint(20) unsigned NOT NULL,
 			order_id bigint(20) unsigned NOT NULL,
 			customer_user_id bigint(20) unsigned DEFAULT NULL,
-			referral_code varchar(12) NOT NULL,
+			referral_code varchar(50) NOT NULL,
 			click_id bigint(20) unsigned DEFAULT NULL,
 			order_total decimal(12,2) NOT NULL,
 			is_subscription_renewal tinyint(1) NOT NULL DEFAULT 0,
@@ -391,6 +397,45 @@ class Konx_Install {
 			KEY idx_created_at (created_at)
 		) {$charset_collate};";
 
+		// ---------------------------------------------------------------
+		// Table 12: API Keys
+		// ---------------------------------------------------------------
+		$table = $wpdb->prefix . 'konx_api_keys';
+		$tables[] = "CREATE TABLE {$table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			key_name varchar(100) NOT NULL,
+			key_hash varchar(64) NOT NULL,
+			key_prefix varchar(8) NOT NULL,
+			permissions varchar(50) NOT NULL DEFAULT 'read_write',
+			created_by bigint(20) unsigned NOT NULL,
+			last_used_at datetime DEFAULT NULL,
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			revoked_at datetime DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY uq_key_hash (key_hash),
+			KEY idx_key_prefix (key_prefix),
+			KEY idx_created_by (created_by)
+		) {$charset_collate};";
+
+		// ---------------------------------------------------------------
+		// Table 13: API Request Log
+		// ---------------------------------------------------------------
+		$table = $wpdb->prefix . 'konx_api_log';
+		$tables[] = "CREATE TABLE {$table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			api_key_id bigint(20) unsigned DEFAULT NULL,
+			endpoint varchar(100) NOT NULL,
+			request_method varchar(10) NOT NULL,
+			request_ip_hash varchar(64) DEFAULT NULL,
+			response_code smallint(5) unsigned NOT NULL,
+			error_message varchar(500) DEFAULT NULL,
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY  (id),
+			KEY idx_api_key_id (api_key_id),
+			KEY idx_endpoint (endpoint),
+			KEY idx_created_at (created_at)
+		) {$charset_collate};";
+
 		return $tables;
 	}
 
@@ -417,11 +462,6 @@ class Konx_Install {
 			array( 'business', 'pro_pack', 'one_time', '0.4000' ),
 			array( 'business', 'ecard_pack', 'one_time', '0.4000' ),
 
-			// One-time: Referral Affiliate.
-			array( 'referral', 'starter_pack', 'one_time', '0.2000' ),
-			array( 'referral', 'pro_pack', 'one_time', '0.2000' ),
-			array( 'referral', 'ecard_pack', 'one_time', '0.2000' ),
-
 			// One-time: Team Agent.
 			array( 'team_agent', 'starter_pack', 'one_time', '0.4000' ),
 			array( 'team_agent', 'pro_pack', 'one_time', '0.4000' ),
@@ -439,7 +479,6 @@ class Konx_Install {
 
 			// Recurring: All types at 10%.
 			array( 'business', 'subscription', 'recurring', '0.1000' ),
-			array( 'referral', 'subscription', 'recurring', '0.1000' ),
 			array( 'team_agent', 'subscription', 'recurring', '0.1000' ),
 			array( 'marketing_agent', 'subscription', 'recurring', '0.1000' ),
 			array( 'sales_agent', 'subscription', 'recurring', '0.1000' ),
@@ -476,7 +515,7 @@ class Konx_Install {
 	}
 
 	/**
-	 * Placeholder for future database upgrade routines.
+	 * Run database upgrade routines for versions below current.
 	 *
 	 * Called from the plugins_loaded hook when the stored DB version
 	 * differs from KONX_AFFILIATE_DB_VERSION.
@@ -484,13 +523,49 @@ class Konx_Install {
 	 * @param string $installed_version The currently installed DB version.
 	 */
 	public static function maybe_upgrade( $installed_version ) {
-		// Future upgrade routines will go here.
-		// Example:
-		// if ( version_compare( $installed_version, '1.1.0', '<' ) ) {
-		//     self::upgrade_to_110();
-		// }
+
+		if ( version_compare( $installed_version, '1.1.0', '<' ) ) {
+			self::upgrade_to_110();
+		}
 
 		self::create_tables();
 		update_option( 'konx_affiliate_db_version', KONX_AFFILIATE_DB_VERSION );
+	}
+
+	/**
+	 * Upgrade to database version 1.1.0.
+	 *
+	 * Changes:
+	 * - Widen referral_code to varchar(50) in affiliates, clicks, conversions.
+	 * - Add external_id and phone columns to affiliates.
+	 * - Change affiliate_type default from 'referral' to 'sales_agent'.
+	 * - Create API keys and API log tables.
+	 * - Update cookie duration default from 30 to 90 days.
+	 * - Deactivate referral affiliate commission rules.
+	 *
+	 * Column widens and new tables are handled by dbDelta via create_tables().
+	 * This method handles data migrations that dbDelta cannot do.
+	 */
+	private static function upgrade_to_110() {
+		global $wpdb;
+
+		// Deactivate referral affiliate commission rules (keep data, set inactive).
+		$rules_table = $wpdb->prefix . 'konx_commission_rules';
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$rules_table} SET is_active = 0, updated_at = %s WHERE affiliate_type = %s AND is_active = 1",
+				current_time( 'mysql', true ),
+				'referral'
+			)
+		);
+
+		// Update cookie duration default to 90 days if still at old default.
+		$referral_settings = get_option( 'konx_referral_settings', array() );
+		if ( empty( $referral_settings['cookie_days'] ) || 30 === (int) $referral_settings['cookie_days'] ) {
+			$referral_settings['cookie_days'] = 90;
+			update_option( 'konx_referral_settings', $referral_settings );
+		}
 	}
 }

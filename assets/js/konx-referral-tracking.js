@@ -35,7 +35,7 @@
 			return;
 		}
 
-		if ( ref && ref.length > 0 && ref.length <= 12 ) {
+		if ( ref && ref.length > 0 && ref.length <= 50 ) {
 			try {
 				localStorage.setItem( STORAGE_KEY, ref.toUpperCase() );
 			} catch ( e ) {

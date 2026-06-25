@@ -3,7 +3,7 @@
  * Plugin Name:       KonX Affiliate Dashboard
  * Plugin URI:        https://github.com/toxickim24/konx-affiliate-dashboard
  * Description:       A custom affiliate dashboard for WooCommerce.
- * Version:           1.2.0
+ * Version:           1.4.0
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            toxickim24
@@ -26,8 +26,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-define( 'KONX_AFFILIATE_VERSION', '1.2.0' );
-define( 'KONX_AFFILIATE_DB_VERSION', '1.0.0' );
+define( 'KONX_AFFILIATE_VERSION', '1.4.0' );
+define( 'KONX_AFFILIATE_DB_VERSION', '1.1.0' );
 define( 'KONX_AFFILIATE_PLUGIN_FILE', __FILE__ );
 define( 'KONX_AFFILIATE_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'KONX_AFFILIATE_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -183,6 +183,9 @@ function konx_affiliate_init() {
 		Konx_Install::maybe_upgrade( $installed_db_version );
 	}
 
+	// REST API (loads on all requests — REST is not admin).
+	Konx_REST_API::init();
+
 	// Referral tracking and order attribution (frontend + AJAX).
 	Konx_Referral_Tracker::init();
 	Konx_Order_Attribution::init();
@@ -190,6 +193,9 @@ function konx_affiliate_init() {
 	// Frontend shortcodes.
 	Konx_Dashboard::init();
 	Konx_Registration::init();
+
+	// WooCommerce My Account integration.
+	Konx_My_Account::init();
 
 	// Commission engines and refund handling.
 	Konx_Commission_Engine::init();
@@ -205,20 +211,27 @@ function konx_affiliate_init() {
 	// Initialize admin pages.
 	if ( is_admin() ) {
 		add_action( 'admin_enqueue_scripts', 'konx_enqueue_admin_assets' );
+
+		// Main menu pages.
 		Konx_Admin_Dashboard::init();
 		Konx_Affiliates_Page::init();
-		Konx_Admin_Product_Mapping::init();
 		Konx_Admin_Fees_Page::init();
 		Konx_Withdrawals_Page::init();
 		Konx_Reports_Page::init();
 		Konx_Settings_Page::init();
-		Konx_Help_Center::init();
-		Konx_System_Status::init();
-		Konx_Export_Manager::init();
-		Konx_Activity_Log_Page::init();
+		Konx_Admin_Product_Mapping::init();
+
+		// Tools page (tabs: notifications, activity log, financial audit, api keys, system status, help).
+		Konx_Tools_Page::init();
 		Konx_Notification_Center::init();
+		Konx_Api_Keys_Page::init();
+
+		// Utilities (no menu, handlers only).
+		Konx_Export_Manager::init();
 		Konx_Setup_Wizard::init();
-		Konx_Financial_Audit::init();
+
+		// Migration wizard.
+		Konx_Migration_Wizard::init();
 	}
 }
 add_action( 'plugins_loaded', 'konx_affiliate_init' );
