@@ -27,8 +27,6 @@ class Konx_Dashboard {
 		add_action( 'admin_post_konx_affiliate_withdrawal', array( __CLASS__, 'handle_withdrawal_form' ) );
 		add_action( 'admin_post_nopriv_konx_affiliate_withdrawal', '__return_false' );
 		add_action( 'admin_post_konx_update_profile', array( __CLASS__, 'handle_profile_update' ) );
-		// No automatic redirect — affiliates see a banner on my-account instead.
-		add_action( 'woocommerce_before_my_account', array( __CLASS__, 'render_myaccount_dashboard_link' ) );
 	}
 
 	/**
@@ -58,75 +56,6 @@ class Konx_Dashboard {
 		self::set_feedback( (int) $affiliate->id, 'success', __( 'Profile updated.', 'konx-affiliate-dashboard' ) );
 		wp_safe_redirect( $redirect );
 		exit;
-	}
-
-	/**
-	 * Show an "Affiliate Dashboard" banner on the WooCommerce my-account page.
-	 */
-	public static function render_myaccount_dashboard_link() {
-		if ( ! is_user_logged_in() ) {
-			return;
-		}
-
-		$affiliate = Konx_Affiliate_Manager::get_affiliate_by_user( get_current_user_id() );
-		if ( ! $affiliate ) {
-			return;
-		}
-
-		$dashboard_url = get_permalink( self::get_dashboard_page_id() );
-		if ( ! $dashboard_url ) {
-			return;
-		}
-
-		printf(
-			'<div style="background:#f0f6fc;border:1px solid #72aee6;border-radius:6px;padding:14px 20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;">'
-			. '<span>%s</span>'
-			. '<a href="%s" style="background:#2271b1;color:#fff;padding:8px 16px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px;">%s</a>'
-			. '</div>',
-			esc_html__( 'You have an affiliate account with KonX.', 'konx-affiliate-dashboard' ),
-			esc_url( $dashboard_url ),
-			esc_html__( 'Go to Affiliate Dashboard', 'konx-affiliate-dashboard' )
-		);
-	}
-
-	/**
-	 * Redirect affiliate users from WooCommerce my-account to the affiliate
-	 * dashboard, unless they explicitly want to stay on my-account.
-	 *
-	 * The redirect only fires on the main my-account endpoint (not sub-pages
-	 * like /my-account/orders/ or /my-account/edit-account/). A ?stay=1
-	 * parameter bypasses the redirect so the "My Orders" link works.
-	 */
-	public static function redirect_affiliate_from_myaccount() {
-		if ( ! is_user_logged_in() || ! function_exists( 'wc_get_page_id' ) ) {
-			return;
-		}
-
-		// Allow affiliates to stay on my-account if they choose.
-		if ( isset( $_GET['stay'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-			return;
-		}
-
-		$myaccount_id = wc_get_page_id( 'myaccount' );
-		if ( ! is_page( $myaccount_id ) ) {
-			return;
-		}
-
-		// Only redirect from the main my-account page, not sub-endpoints.
-		if ( is_wc_endpoint_url() ) {
-			return;
-		}
-
-		$affiliate = Konx_Affiliate_Manager::get_affiliate_by_user( get_current_user_id() );
-		if ( ! $affiliate ) {
-			return;
-		}
-
-		$dashboard_url = get_permalink( self::get_dashboard_page_id() );
-		if ( $dashboard_url ) {
-			wp_safe_redirect( $dashboard_url );
-			exit;
-		}
 	}
 
 	/**
