@@ -17,16 +17,6 @@ $fee       = $data['fee_status'];
 
 <div class="konx-dashboard">
 
-	<!-- Top Bar -->
-	<div class="konx-topbar">
-		<span class="konx-topbar-welcome">
-			<?php printf( esc_html__( 'Welcome back, %s', 'konx-affiliate-dashboard' ), '<strong>' . esc_html( wp_get_current_user()->display_name ) . '</strong>' ); ?>
-		</span>
-		<a href="<?php echo esc_url( wp_logout_url( home_url( '/' ) ) ); ?>" class="konx-btn konx-btn-sm konx-btn-outline">
-			<?php esc_html_e( 'Log Out', 'konx-affiliate-dashboard' ); ?>
-		</a>
-	</div>
-
 	<?php if ( $data['feedback'] ) : ?>
 		<div class="konx-notice konx-notice-<?php echo esc_attr( $data['feedback']['type'] ); ?>">
 			<?php echo esc_html( $data['feedback']['message'] ); ?>
@@ -44,130 +34,121 @@ $fee       = $data['fee_status'];
 		</div>
 	<?php endif; ?>
 
-	<!-- Hero Section -->
+	<!-- Hero Bar -->
 	<div class="konx-hero">
 		<div class="konx-hero-info">
-			<h2><?php printf( esc_html__( 'Hello, %s', 'konx-affiliate-dashboard' ), esc_html( wp_get_current_user()->first_name ?: wp_get_current_user()->display_name ) ); ?></h2>
+			<h2><?php printf( esc_html__( 'Welcome back, %s', 'konx-affiliate-dashboard' ), esc_html( wp_get_current_user()->first_name ?: wp_get_current_user()->display_name ) ); ?></h2>
 			<div class="konx-hero-meta">
 				<span class="konx-badge konx-badge-<?php echo esc_attr( $aff->status ); ?>"><?php echo esc_html( ucfirst( $aff->status ) ); ?></span>
 				<span><?php echo esc_html( Konx_Dashboard::format_type( $aff->affiliate_type ) ); ?></span>
-			</div>
-			<div class="konx-hero-actions">
-				<button type="button" class="konx-btn konx-btn-sm" onclick="konxCopyText('<?php echo esc_js( $data['referral_url'] ); ?>', this)">
-					<?php esc_html_e( 'Copy Referral Link', 'konx-affiliate-dashboard' ); ?>
-				</button>
+				<span class="konx-hero-ref-code"><?php echo esc_html( $aff->referral_code ); ?></span>
 			</div>
 		</div>
-		<div class="konx-hero-balance">
-			<div class="konx-hero-balance-label"><?php esc_html_e( 'Available Balance', 'konx-affiliate-dashboard' ); ?></div>
-			<div class="konx-hero-balance-value">$<?php echo esc_html( $balance['available_balance'] ); ?></div>
+		<div class="konx-hero-actions">
+			<button type="button" class="konx-btn konx-btn-sm" onclick="konxCopyText('<?php echo esc_js( $data['referral_url'] ); ?>', this)">
+				<?php esc_html_e( 'Copy Referral Link', 'konx-affiliate-dashboard' ); ?>
+			</button>
+			<a href="<?php echo esc_url( wp_logout_url( home_url( '/' ) ) ); ?>" class="konx-btn konx-btn-sm konx-btn-ghost">
+				<?php esc_html_e( 'Log Out', 'konx-affiliate-dashboard' ); ?>
+			</a>
 		</div>
 	</div>
 
-	<!-- Affiliate Success Journey -->
-	<?php if ( ! empty( $data['journey'] ) ) : ?>
-		<?php $journey = $data['journey']; ?>
-		<div class="konx-section konx-journey-section">
-			<h3><?php esc_html_e( 'Affiliate Success Journey', 'konx-affiliate-dashboard' ); ?> — <strong><?php echo esc_html( $journey['percent'] ); ?>%</strong> <?php esc_html_e( 'Complete', 'konx-affiliate-dashboard' ); ?></h3>
-			<div class="konx-progress-bar" role="progressbar" aria-valuenow="<?php echo esc_attr( $journey['percent'] ); ?>" aria-valuemin="0" aria-valuemax="100" aria-label="<?php esc_attr_e( 'Journey progress', 'konx-affiliate-dashboard' ); ?>">
-				<div class="konx-progress-fill" style="width:<?php echo esc_attr( min( 100, $journey['percent'] ) ); ?>%;"></div>
+	<!-- Primary Stats Cards -->
+	<div class="konx-hero-cards">
+		<div class="konx-hero-card konx-hero-card-primary">
+			<span class="konx-hero-card-label"><?php esc_html_e( 'Available Balance', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'available_balance' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
+			<span class="konx-hero-card-value">$<?php echo esc_html( $balance['available_balance'] ); ?></span>
+			<a href="#tab-withdrawals" class="konx-btn konx-btn-sm konx-btn-outline konx-hero-card-action" onclick="konxActivateTab('withdrawals')">
+				<?php esc_html_e( 'Request Withdrawal', 'konx-affiliate-dashboard' ); ?>
+			</a>
+		</div>
+		<div class="konx-hero-card">
+			<span class="konx-hero-card-label"><?php esc_html_e( 'Total Earnings', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'lifetime_earnings' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
+			<span class="konx-hero-card-value">$<?php echo esc_html( $balance['lifetime_earnings'] ); ?></span>
+		</div>
+		<div class="konx-hero-card">
+			<span class="konx-hero-card-label"><?php esc_html_e( 'Total Sales', 'konx-affiliate-dashboard' ); ?></span>
+			<span class="konx-hero-card-value"><?php echo esc_html( $milestone['completed_sales'] ); ?></span>
+		</div>
+		<div class="konx-hero-card">
+			<span class="konx-hero-card-label"><?php esc_html_e( 'Withdrawn', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'total_withdrawn' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
+			<span class="konx-hero-card-value">$<?php echo esc_html( $balance['total_withdrawals'] ); ?></span>
+		</div>
+	</div>
+
+	<!-- Milestone Progress + Achievements Row -->
+	<div class="konx-two-col">
+		<!-- Milestone Progress -->
+		<div class="konx-section">
+			<h3><?php esc_html_e( 'Milestone Progress', 'konx-affiliate-dashboard' ); ?></h3>
+			<div class="konx-milestone-summary">
+				<span class="konx-milestone-count">
+					<strong><?php echo esc_html( $milestone['sales_in_block'] ); ?></strong> / <?php echo esc_html( Konx_Milestone_Bonus::BLOCK_SIZE ); ?>
+				</span>
+				<span class="konx-muted"><?php esc_html_e( 'sales toward next milestone', 'konx-affiliate-dashboard' ); ?></span>
 			</div>
+			<div class="konx-progress-bar" role="progressbar" aria-valuenow="<?php echo esc_attr( $milestone['percent_complete'] ); ?>" aria-valuemin="0" aria-valuemax="100" aria-label="<?php esc_attr_e( 'Milestone progress', 'konx-affiliate-dashboard' ); ?>">
+				<div class="konx-progress-fill" style="width:<?php echo esc_attr( min( 100, $milestone['percent_complete'] ) ); ?>%;"></div>
+			</div>
+			<div class="konx-milestone-footer">
+				<span class="konx-muted"><?php printf( esc_html__( 'Estimated next bonus: %s', 'konx-affiliate-dashboard' ), '<strong>$' . esc_html( $data['estimated_bonus'] ) . '</strong>' ); ?></span>
+			</div>
+			<p class="konx-muted" style="margin-top:8px;"><?php esc_html_e( 'Every 100 sales, you earn a bonus equal to all commissions from that block of 100 sales!', 'konx-affiliate-dashboard' ); ?></p>
+		</div>
 
-			<?php if ( $journey['percent'] >= 100 ) : ?>
-				<div class="konx-notice konx-notice-success" style="margin-top:12px;">
-					<?php esc_html_e( 'Congratulations! You have completed all journey milestones. Keep growing your affiliate business!', 'konx-affiliate-dashboard' ); ?>
+		<!-- Achievements -->
+		<div class="konx-section">
+			<h3><?php esc_html_e( 'Achievements', 'konx-affiliate-dashboard' ); ?></h3>
+			<?php if ( ! empty( $data['journey'] ) ) : ?>
+				<?php $journey = $data['journey']; ?>
+				<div class="konx-achievement-summary">
+					<span class="konx-achievement-count"><?php echo esc_html( $milestone['milestones_achieved'] ); ?></span>
+					<span class="konx-achievement-text"><?php esc_html_e( 'Milestones Completed', 'konx-affiliate-dashboard' ); ?></span>
 				</div>
-			<?php endif; ?>
+				<div class="konx-progress-bar" role="progressbar" aria-valuenow="<?php echo esc_attr( $journey['percent'] ); ?>" aria-valuemin="0" aria-valuemax="100" aria-label="<?php esc_attr_e( 'Achievement progress', 'konx-affiliate-dashboard' ); ?>">
+					<div class="konx-progress-fill" style="width:<?php echo esc_attr( min( 100, $journey['percent'] ) ); ?>%;"></div>
+				</div>
 
-			<div class="konx-journey-grid">
-				<?php foreach ( $journey['steps'] as $step ) : ?>
-					<div class="konx-journey-step <?php echo $step['done'] ? 'done' : 'pending'; ?>">
-						<span class="konx-journey-check"><?php echo $step['done'] ? '&#10003;' : '&#9675;'; ?></span>
-						<div>
-							<strong><?php echo esc_html( $step['label'] ); ?></strong>
-							<?php if ( ! $step['done'] ) : ?>
-								<small><?php echo esc_html( $step['hint'] ); ?></small>
-							<?php endif; ?>
-						</div>
+				<?php if ( $journey['percent'] >= 100 ) : ?>
+					<div class="konx-notice konx-notice-success" style="margin-top:12px;">
+						<?php esc_html_e( 'Congratulations! You have completed all milestones. Keep growing your affiliate business!', 'konx-affiliate-dashboard' ); ?>
 					</div>
-				<?php endforeach; ?>
-			</div>
+				<?php endif; ?>
 
-			<?php if ( $journey['next_action'] ) : ?>
-				<div class="konx-journey-next">
-					<strong><?php esc_html_e( 'Next Step:', 'konx-affiliate-dashboard' ); ?></strong>
-					<?php echo esc_html( $journey['next_action']['hint'] ); ?>
+				<div class="konx-journey-grid">
+					<?php foreach ( $journey['steps'] as $step ) : ?>
+						<div class="konx-journey-step <?php echo $step['done'] ? 'done' : 'pending'; ?>">
+							<span class="konx-journey-check"><?php echo $step['done'] ? '&#10003;' : '&#9675;'; ?></span>
+							<div>
+								<strong><?php echo esc_html( $step['label'] ); ?></strong>
+								<?php if ( ! $step['done'] ) : ?>
+									<small><?php echo esc_html( $step['hint'] ); ?></small>
+								<?php endif; ?>
+							</div>
+						</div>
+					<?php endforeach; ?>
+				</div>
+
+				<?php if ( $journey['next_action'] ) : ?>
+					<div class="konx-journey-next">
+						<strong><?php esc_html_e( 'Next Step:', 'konx-affiliate-dashboard' ); ?></strong>
+						<?php echo esc_html( $journey['next_action']['hint'] ); ?>
+					</div>
+				<?php endif; ?>
+			<?php else : ?>
+				<div class="konx-achievement-summary">
+					<span class="konx-achievement-count"><?php echo esc_html( $milestone['milestones_achieved'] ); ?></span>
+					<span class="konx-achievement-text"><?php esc_html_e( 'Milestones Completed', 'konx-affiliate-dashboard' ); ?></span>
 				</div>
 			<?php endif; ?>
 		</div>
-	<?php endif; ?>
-
-	<!-- Performance Stats -->
-	<div class="konx-stats-grid">
-		<div class="konx-stat">
-			<span class="konx-stat-value">$<?php echo esc_html( $balance['lifetime_earnings'] ); ?></span>
-			<span class="konx-stat-label"><?php esc_html_e( 'Total Earnings', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'lifetime_earnings' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
-		</div>
-		<div class="konx-stat">
-			<span class="konx-stat-value">$<?php echo esc_html( $balance['available_balance'] ); ?></span>
-			<span class="konx-stat-label"><?php esc_html_e( 'Available Balance', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'available_balance' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
-		</div>
-		<div class="konx-stat">
-			<span class="konx-stat-value">$<?php echo esc_html( $balance['total_withdrawals'] ); ?></span>
-			<span class="konx-stat-label"><?php esc_html_e( 'Withdrawn', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'total_withdrawn' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
-		</div>
-		<div class="konx-stat">
-			<span class="konx-stat-value"><?php echo esc_html( $milestone['completed_sales'] ); ?></span>
-			<span class="konx-stat-label"><?php esc_html_e( 'Total Sales', 'konx-affiliate-dashboard' ); ?></span>
-		</div>
-		<div class="konx-stat">
-			<span class="konx-stat-value"><?php echo esc_html( $milestone['milestones_achieved'] ); ?></span>
-			<span class="konx-stat-label"><?php esc_html_e( 'Milestones', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'milestone_bonus' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
-		</div>
-		<div class="konx-stat">
-			<span class="konx-stat-value">$<?php echo esc_html( $data['estimated_bonus'] ); ?></span>
-			<span class="konx-stat-label"><?php esc_html_e( 'Estimated Next Bonus', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'milestone_bonus' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
-		</div>
 	</div>
 
-	<!-- Milestone Progress -->
-	<div class="konx-section">
-		<h3><?php esc_html_e( 'Milestone Progress', 'konx-affiliate-dashboard' ); ?></h3>
-		<div class="konx-progress-bar" role="progressbar" aria-valuenow="<?php echo esc_attr( $milestone['percent_complete'] ); ?>" aria-valuemin="0" aria-valuemax="100">
-			<div class="konx-progress-fill" style="width:<?php echo esc_attr( min( 100, $milestone['percent_complete'] ) ); ?>%;"></div>
-		</div>
-		<p class="konx-progress-text">
-			<strong><?php echo esc_html( $milestone['sales_in_block'] ); ?></strong> / <?php echo esc_html( Konx_Milestone_Bonus::BLOCK_SIZE ); ?>
-			<?php esc_html_e( 'sales toward your next milestone bonus', 'konx-affiliate-dashboard' ); ?>
-		</p>
-		<p class="konx-muted"><?php esc_html_e( 'Every 100 sales, you earn a bonus equal to all commissions from that block of 100 sales!', 'konx-affiliate-dashboard' ); ?></p>
-		<?php if ( ! empty( $data['bonuses']['entries'] ) ) : ?>
-			<h4><?php esc_html_e( 'Bonus History', 'konx-affiliate-dashboard' ); ?></h4>
-			<div class="konx-table-wrap">
-				<table class="konx-table">
-					<thead>
-						<tr>
-							<th scope="col"><?php esc_html_e( 'Milestone', 'konx-affiliate-dashboard' ); ?></th>
-							<th scope="col"><?php esc_html_e( 'Block', 'konx-affiliate-dashboard' ); ?></th>
-							<th scope="col"><?php esc_html_e( 'Bonus', 'konx-affiliate-dashboard' ); ?></th>
-							<th scope="col"><?php esc_html_e( 'Status', 'konx-affiliate-dashboard' ); ?></th>
-							<th scope="col"><?php esc_html_e( 'Date', 'konx-affiliate-dashboard' ); ?></th>
-						</tr>
-					</thead>
-					<tbody>
-						<?php foreach ( $data['bonuses']['entries'] as $bonus ) : ?>
-							<tr>
-								<td>#<?php echo esc_html( $bonus->milestone_number ); ?></td>
-								<td><?php echo esc_html( $bonus->sale_block_start . '–' . $bonus->sale_block_end ); ?></td>
-								<td><strong>$<?php echo esc_html( $bonus->bonus_amount ); ?></strong></td>
-								<td><span class="konx-badge konx-badge-<?php echo esc_attr( $bonus->status ); ?>"><?php echo esc_html( ucfirst( $bonus->status ) ); ?></span></td>
-								<td><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $bonus->created_at ) ) ); ?></td>
-							</tr>
-						<?php endforeach; ?>
-					</tbody>
-				</table>
-			</div>
-		<?php endif; ?>
+	<!-- Recent Referral Activity — Coming Soon -->
+	<div class="konx-section konx-section-placeholder">
+		<h3><?php esc_html_e( 'Recent Referral Activity', 'konx-affiliate-dashboard' ); ?></h3>
+		<p class="konx-muted"><?php esc_html_e( 'Coming Soon', 'konx-affiliate-dashboard' ); ?></p>
 	</div>
 
 	<!-- Referral Tools -->
@@ -195,10 +176,10 @@ $fee       = $data['fee_status'];
 			</div>
 		</div>
 
-		<!-- Share & QR -->
-		<div style="margin-top:14px;">
-			<label style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--konx-text-light,#646970);font-weight:600;display:block;margin-bottom:8px;"><?php esc_html_e( 'Share Your Link', 'konx-affiliate-dashboard' ); ?></label>
-			<div style="display:flex;gap:8px;flex-wrap:wrap;">
+		<!-- Share -->
+		<div class="konx-share-row">
+			<label class="konx-share-label"><?php esc_html_e( 'Share Your Link', 'konx-affiliate-dashboard' ); ?></label>
+			<div class="konx-share-buttons">
 				<?php
 				$share_url   = urlencode( $data['referral_url'] );
 				$share_text  = urlencode( __( 'Check out KonX! Use my referral link:', 'konx-affiliate-dashboard' ) );
@@ -211,6 +192,37 @@ $fee       = $data['fee_status'];
 			</div>
 		</div>
 	</div>
+
+	<!-- Milestone Bonus History -->
+	<?php if ( ! empty( $data['bonuses']['entries'] ) ) : ?>
+		<div class="konx-section">
+			<h3><?php esc_html_e( 'Milestone Bonus History', 'konx-affiliate-dashboard' ); ?></h3>
+			<div class="konx-table-wrap">
+				<table class="konx-table">
+					<thead>
+						<tr>
+							<th scope="col"><?php esc_html_e( 'Milestone', 'konx-affiliate-dashboard' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Block', 'konx-affiliate-dashboard' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Bonus', 'konx-affiliate-dashboard' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Status', 'konx-affiliate-dashboard' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Date', 'konx-affiliate-dashboard' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $data['bonuses']['entries'] as $bonus ) : ?>
+							<tr>
+								<td>#<?php echo esc_html( $bonus->milestone_number ); ?></td>
+								<td><?php echo esc_html( $bonus->sale_block_start . '–' . $bonus->sale_block_end ); ?></td>
+								<td><strong>$<?php echo esc_html( $bonus->bonus_amount ); ?></strong></td>
+								<td><span class="konx-badge konx-badge-<?php echo esc_attr( $bonus->status ); ?>"><?php echo esc_html( ucfirst( $bonus->status ) ); ?></span></td>
+								<td><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $bonus->created_at ) ) ); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			</div>
+		</div>
+	<?php endif; ?>
 
 	<!-- Financial Activity Tabs -->
 	<div class="konx-section">
@@ -434,6 +446,14 @@ $fee       = $data['fee_status'];
 		});
 	});
 })();
+
+// Activate a specific tab (used by Request Withdrawal button)
+function konxActivateTab(tabName){
+	var tab = document.querySelector('.konx-tab[data-tab="' + tabName + '"]');
+	if(tab){ tab.click(); }
+	var panel = document.getElementById('tab-' + tabName);
+	if(panel){ panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+}
 
 // Copy helper
 function konxCopyText(text, btn){
