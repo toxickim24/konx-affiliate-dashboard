@@ -18,6 +18,92 @@
 }
 
 /* ================================================================
+ * Portal Layout — Sidebar + Content
+ * ============================================================= */
+.konx-portal {
+	display: grid;
+	grid-template-columns: 200px 1fr;
+	gap: 24px;
+	align-items: start;
+}
+
+.konx-portal-content {
+	min-width: 0;
+}
+
+.konx-portal-section {
+	scroll-margin-top: 20px;
+}
+
+/* ================================================================
+ * Portal Navigation — Sidebar
+ * ============================================================= */
+.konx-portal-nav {
+	position: sticky;
+	top: 32px;
+	align-self: start;
+}
+
+.konx-portal-menu {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.konx-portal-menu li {
+	margin: 0;
+}
+
+.konx-portal-link {
+	display: block;
+	padding: 10px 16px;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--konx-text-light, #646970);
+	text-decoration: none;
+	border-left: 3px solid transparent;
+	border-radius: 0 var(--konx-radius-sm, 4px) var(--konx-radius-sm, 4px) 0;
+	transition: all var(--konx-transition, 0.15s);
+}
+
+.konx-portal-link:hover {
+	color: var(--konx-text, #1d2327);
+	background: var(--konx-bg, #f6f7f7);
+}
+
+.konx-portal-link.active {
+	color: var(--konx-primary, #2271b1);
+	font-weight: 600;
+	border-left-color: var(--konx-primary, #2271b1);
+	background: var(--konx-primary-light, #f0f6fc);
+}
+
+/* ================================================================
+ * Portal Toggle — Mobile Menu Button
+ * ============================================================= */
+.konx-portal-toggle {
+	display: none;
+	width: 100%;
+	padding: 12px 20px;
+	margin-bottom: 16px;
+	background: var(--konx-white, #fff);
+	border: 1px solid var(--konx-border, #dcdcde);
+	border-radius: var(--konx-radius, 8px);
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--konx-text, #1d2327);
+	cursor: pointer;
+	text-align: left;
+	justify-content: space-between;
+	align-items: center;
+	box-shadow: var(--konx-shadow, 0 1px 4px rgba(0,0,0,0.06));
+}
+
+.konx-portal-toggle-icon {
+	font-size: 18px;
+}
+
+/* ================================================================
  * Hero Bar
  * ============================================================= */
 .konx-hero {
@@ -624,7 +710,7 @@ code {
 }
 
 /* ================================================================
- * Responsive — Tablet (2x2 cards)
+ * Responsive — Tablet (sidebar collapses)
  * ============================================================= */
 @media (max-width: 900px) {
 	.konx-hero-cards {
@@ -633,6 +719,41 @@ code {
 
 	.konx-two-col {
 		grid-template-columns: 1fr;
+	}
+
+	/* Collapse sidebar into mobile menu */
+	.konx-portal {
+		display: block;
+	}
+
+	.konx-portal-toggle {
+		display: flex;
+	}
+
+	.konx-portal-nav {
+		position: static;
+		display: none;
+		margin-bottom: 16px;
+		background: var(--konx-white, #fff);
+		border: 1px solid var(--konx-border, #dcdcde);
+		border-radius: var(--konx-radius, 8px);
+		padding: 8px 0;
+		box-shadow: var(--konx-shadow, 0 1px 4px rgba(0,0,0,0.06));
+	}
+
+	.konx-portal-nav.open {
+		display: block;
+	}
+
+	.konx-portal-link {
+		border-left: none;
+		border-radius: 0;
+		padding: 12px 20px;
+	}
+
+	.konx-portal-link.active {
+		background: var(--konx-primary-light, #f0f6fc);
+		border-left: none;
 	}
 }
 
