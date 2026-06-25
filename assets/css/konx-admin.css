@@ -345,6 +345,183 @@
 }
 
 /* ================================================================
+ * Setup Progress Card
+ * ============================================================= */
+.konx-setup-card {
+	background: var(--konx-bg-white);
+	border: 1px solid var(--konx-border);
+	border-radius: var(--konx-radius);
+	padding: var(--konx-space-xl);
+	margin-bottom: var(--konx-space-lg);
+	box-shadow: var(--konx-shadow);
+}
+
+.konx-setup-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: var(--konx-space-base);
+	margin-bottom: var(--konx-space-base);
+}
+
+.konx-setup-header h2 {
+	margin: 0 0 4px;
+	font-size: 18px;
+	font-weight: 700;
+	color: var(--konx-text);
+}
+
+.konx-setup-counter {
+	font-size: 14px;
+	color: var(--konx-text-secondary);
+	font-weight: 500;
+}
+
+.konx-setup-progress {
+	background: #e0e0e0;
+	border-radius: 10px;
+	height: 12px;
+	overflow: hidden;
+	margin-bottom: var(--konx-space-base);
+}
+
+.konx-setup-progress-fill {
+	background: linear-gradient(90deg, var(--konx-primary), #4fa3d1);
+	height: 100%;
+	border-radius: 10px;
+	transition: width 0.5s ease;
+	min-width: 2px;
+}
+
+.konx-setup-ready {
+	display: flex;
+	align-items: center;
+	gap: var(--konx-space-md);
+	padding: var(--konx-space-base);
+	background: var(--konx-success-bg);
+	border-radius: var(--konx-radius);
+	margin-bottom: var(--konx-space-base);
+}
+
+.konx-setup-ready .dashicons {
+	font-size: 28px;
+	width: 28px;
+	height: 28px;
+	color: var(--konx-success);
+	flex-shrink: 0;
+}
+
+.konx-setup-ready strong {
+	display: block;
+	font-size: 15px;
+	color: var(--konx-text);
+}
+
+.konx-setup-ready p {
+	margin: 2px 0 0;
+	font-size: 13px;
+	color: var(--konx-text-secondary);
+}
+
+.konx-setup-checklist {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+}
+
+.konx-setup-item {
+	display: flex;
+	align-items: center;
+	gap: var(--konx-space-md);
+	padding: var(--konx-space-md) var(--konx-space-base);
+	border-bottom: 1px solid var(--konx-border-light);
+}
+
+.konx-setup-item:last-child {
+	border-bottom: none;
+}
+
+.konx-setup-icon {
+	flex-shrink: 0;
+}
+
+.konx-setup-icon .dashicons {
+	font-size: 20px;
+	width: 20px;
+	height: 20px;
+}
+
+.konx-setup-item-body {
+	flex: 1;
+	min-width: 0;
+}
+
+.konx-setup-item-body strong {
+	display: block;
+	font-size: 14px;
+	color: var(--konx-text);
+}
+
+.konx-setup-detail {
+	display: block;
+	font-size: 12px;
+	color: var(--konx-text-secondary);
+	margin-top: 1px;
+}
+
+/* ================================================================
+ * Configuration Quick Access Cards
+ * ============================================================= */
+.konx-setup-cards {
+	margin-bottom: var(--konx-space-lg);
+}
+
+.konx-config-card {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	background: var(--konx-bg-white);
+	border: 1px solid var(--konx-border);
+	border-radius: var(--konx-radius);
+	padding: var(--konx-space-base);
+	text-decoration: none;
+	color: var(--konx-text);
+	transition: border-color 0.15s, box-shadow 0.15s;
+	box-shadow: var(--konx-shadow);
+}
+
+.konx-config-card:hover {
+	border-color: var(--konx-primary);
+	box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+	color: var(--konx-text);
+}
+
+.konx-config-card:focus {
+	outline: 2px solid var(--konx-primary);
+	outline-offset: 2px;
+	color: var(--konx-text);
+}
+
+.konx-config-status {
+	margin-bottom: 4px;
+}
+
+.konx-config-status .dashicons {
+	font-size: 20px;
+	width: 20px;
+	height: 20px;
+}
+
+.konx-config-card strong {
+	font-size: 14px;
+}
+
+.konx-config-detail {
+	font-size: 12px;
+	color: var(--konx-text-secondary);
+}
+
+/* ================================================================
  * Accessibility
  * ============================================================= */
 .sr-only {
@@ -378,6 +555,10 @@
 	.konx-grid-2,
 	.konx-grid-3 {
 		grid-template-columns: 1fr;
+	}
+
+	.konx-setup-header {
+		flex-direction: column;
 	}
 
 	.konx-stats-grid {

@@ -47,6 +47,7 @@ class Konx_Admin_Dashboard {
 		$stats  = self::get_overview_stats();
 		$recent = self::get_recent_activity();
 		$chart  = self::get_chart_data();
+		$setup  = self::get_setup_status();
 
 		wp_enqueue_script( 'chart-js', 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js', array(), '4.4.4', true );
 
@@ -55,6 +56,8 @@ class Konx_Admin_Dashboard {
 			<div class="konx-page-header">
 				<h1><?php esc_html_e( 'KonX Affiliates — Overview', 'konx-affiliate-dashboard' ); ?></h1>
 			</div>
+
+			<?php self::render_setup_checklist( $setup ); ?>
 
 			<!-- Stats -->
 			<div class="konx-stats-grid">
@@ -194,6 +197,287 @@ class Konx_Admin_Dashboard {
 		</script>
 		<?php
 	}
+
+	// ------------------------------------------------------------------
+	// Setup Progress Checklist
+	// ------------------------------------------------------------------
+
+	/**
+	 * Calculate the setup status for all checklist items.
+	 *
+	 * Returns an array with 'items' (each with key, label, status, detail, url)
+	 * and 'completed'/'total' counts. Migration is optional and excluded
+	 * from completion counts.
+	 *
+	 * @return array Setup status data.
+	 */
+	private static function get_setup_status() {
+		global $wpdb;
+
+		$items = array();
+
+		// 1. System Status — tables exist + WooCommerce active.
+		$required_tables = array(
+			'konx_affiliates', 'konx_referral_clicks', 'konx_referral_conversions',
+			'konx_commissions', 'konx_wallet_ledger', 'konx_withdrawals',
+			'konx_admin_fees', 'konx_milestones', 'konx_commission_rules',
+			'konx_product_map', 'konx_audit_log',
+		);
+		$missing_tables = 0;
+		foreach ( $required_tables as $t ) {
+			$full = $wpdb->prefix . $t;
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $full ) ) !== $full ) {
+				$missing_tables++;
+			}
+		}
+		$wc_active     = konx_affiliate_is_woocommerce_active();
+		$system_ok     = ( 0 === $missing_tables && $wc_active );
+		$system_detail = $system_ok
+			? __( 'Healthy', 'konx-affiliate-dashboard' )
+			: ( ! $wc_active ? __( 'WooCommerce not active', 'konx-affiliate-dashboard' ) : sprintf( __( '%d tables missing', 'konx-affiliate-dashboard' ), $missing_tables ) );
+		$items[] = array(
+			'key'      => 'system_status',
+			'label'    => __( 'System Status', 'konx-affiliate-dashboard' ),
+			'status'   => $system_ok ? 'complete' : 'attention',
+			'detail'   => $system_detail,
+			'url'      => admin_url( 'admin.php?page=konx-system-status' ),
+			'required' => true,
+		);
+
+		// 2. Product Mapping — at least one active mapping.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$mapping_count = (int) $wpdb->get_var(
+			"SELECT COUNT(*) FROM {$wpdb->prefix}konx_product_map WHERE is_active = 1"
+		);
+		$items[] = array(
+			'key'      => 'product_mapping',
+			'label'    => __( 'Product Mapping', 'konx-affiliate-dashboard' ),
+			'status'   => $mapping_count > 0 ? 'complete' : 'attention',
+			'detail'   => $mapping_count > 0
+				? sprintf( _n( '%d Product Mapped', '%d Products Mapped', $mapping_count, 'konx-affiliate-dashboard' ), $mapping_count )
+				: __( 'No products mapped', 'konx-affiliate-dashboard' ),
+			'url'      => admin_url( 'admin.php?page=konx-product-mapping' ),
+			'required' => true,
+		);
+
+		// 3. Commission Rules — at least one active rule.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rule_count = (int) $wpdb->get_var(
+			"SELECT COUNT(*) FROM {$wpdb->prefix}konx_commission_rules WHERE is_active = 1"
+		);
+		$items[] = array(
+			'key'      => 'commission_rules',
+			'label'    => __( 'Commission Rules', 'konx-affiliate-dashboard' ),
+			'status'   => $rule_count > 0 ? 'complete' : 'attention',
+			'detail'   => $rule_count > 0
+				? sprintf( _n( '%d Active Rule', '%d Active Rules', $rule_count, 'konx-affiliate-dashboard' ), $rule_count )
+				: __( 'Needs Attention', 'konx-affiliate-dashboard' ),
+			'url'      => admin_url( 'admin.php?page=konx-settings' ),
+			'required' => true,
+		);
+
+		// 4. Required Pages — dashboard + registration pages.
+		$dash_page = self::find_page_with_shortcode( 'konx_affiliate_dashboard' );
+		$reg_page  = self::find_page_with_shortcode( 'konx_affiliate_register' );
+		$pages_ok  = ( $dash_page && $reg_page );
+		if ( $pages_ok ) {
+			$pages_detail = __( 'Dashboard & Registration pages found', 'konx-affiliate-dashboard' );
+		} elseif ( ! $dash_page && ! $reg_page ) {
+			$pages_detail = __( 'Dashboard & Registration pages missing', 'konx-affiliate-dashboard' );
+		} elseif ( ! $dash_page ) {
+			$pages_detail = __( 'Dashboard page missing', 'konx-affiliate-dashboard' );
+		} else {
+			$pages_detail = __( 'Registration page missing', 'konx-affiliate-dashboard' );
+		}
+		$items[] = array(
+			'key'      => 'required_pages',
+			'label'    => __( 'Required Pages', 'konx-affiliate-dashboard' ),
+			'status'   => $pages_ok ? 'complete' : 'attention',
+			'detail'   => $pages_detail,
+			'url'      => admin_url( 'admin.php?page=konx-system-status' ),
+			'required' => true,
+		);
+
+		// 5. Optional: Data Migration.
+		$migration_status  = get_option( 'konx_migration_status', '' );
+		if ( 'completed' === $migration_status ) {
+			$mig_state  = 'complete';
+			$mig_detail = __( 'Completed', 'konx-affiliate-dashboard' );
+		} elseif ( in_array( $migration_status, array( 'previewed', 'in_progress' ), true ) ) {
+			$mig_state  = 'attention';
+			$mig_detail = __( 'In Progress', 'konx-affiliate-dashboard' );
+		} else {
+			$mig_state  = 'optional';
+			$mig_detail = __( 'Optional', 'konx-affiliate-dashboard' );
+		}
+		$items[] = array(
+			'key'      => 'data_migration',
+			'label'    => __( 'Data Migration', 'konx-affiliate-dashboard' ),
+			'status'   => $mig_state,
+			'detail'   => $mig_detail,
+			'url'      => admin_url( 'admin.php?page=konx-affiliate-dashboard' ), // fallback
+			'required' => false,
+		);
+
+		// Calculate required completion.
+		$completed = 0;
+		$total     = 0;
+		foreach ( $items as $item ) {
+			if ( $item['required'] ) {
+				$total++;
+				if ( 'complete' === $item['status'] ) {
+					$completed++;
+				}
+			}
+		}
+
+		// Find first incomplete required item.
+		$first_incomplete_url = '';
+		foreach ( $items as $item ) {
+			if ( $item['required'] && 'complete' !== $item['status'] ) {
+				$first_incomplete_url = $item['url'];
+				break;
+			}
+		}
+
+		return array(
+			'items'                => $items,
+			'completed'            => $completed,
+			'total'                => $total,
+			'is_ready'             => ( $completed === $total ),
+			'first_incomplete_url' => $first_incomplete_url,
+		);
+	}
+
+	/**
+	 * Render the setup progress checklist card.
+	 *
+	 * @param array $setup The setup status data from get_setup_status().
+	 */
+	private static function render_setup_checklist( $setup ) {
+		$pct = $setup['total'] > 0 ? round( ( $setup['completed'] / $setup['total'] ) * 100 ) : 0;
+		?>
+		<!-- Setup Progress -->
+		<div class="konx-setup-card">
+			<div class="konx-setup-header">
+				<div>
+					<h2><?php esc_html_e( 'KonX Setup Progress', 'konx-affiliate-dashboard' ); ?></h2>
+					<span class="konx-setup-counter">
+						<?php printf( esc_html__( '%1$d / %2$d Complete', 'konx-affiliate-dashboard' ), $setup['completed'], $setup['total'] ); ?>
+					</span>
+				</div>
+				<?php if ( $setup['is_ready'] ) : ?>
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=konx-affiliate-dashboard' ) ); ?>" class="button button-primary button-hero">
+						<?php esc_html_e( 'Go to Dashboard', 'konx-affiliate-dashboard' ); ?>
+					</a>
+				<?php elseif ( $setup['first_incomplete_url'] ) : ?>
+					<a href="<?php echo esc_url( $setup['first_incomplete_url'] ); ?>" class="button button-primary button-hero">
+						<?php esc_html_e( 'Complete Setup', 'konx-affiliate-dashboard' ); ?>
+					</a>
+				<?php endif; ?>
+			</div>
+
+			<div class="konx-setup-progress">
+				<div class="konx-setup-progress-fill" style="width:<?php echo esc_attr( $pct ); ?>%;"></div>
+			</div>
+
+			<?php if ( $setup['is_ready'] ) : ?>
+				<div class="konx-setup-ready">
+					<span class="dashicons dashicons-yes-alt"></span>
+					<div>
+						<strong><?php esc_html_e( 'KonX is Ready', 'konx-affiliate-dashboard' ); ?></strong>
+						<p><?php esc_html_e( 'Your affiliate platform is fully configured.', 'konx-affiliate-dashboard' ); ?></p>
+					</div>
+				</div>
+			<?php endif; ?>
+
+			<div class="konx-setup-checklist">
+				<?php foreach ( $setup['items'] as $item ) : ?>
+					<div class="konx-setup-item konx-setup-item-<?php echo esc_attr( $item['status'] ); ?>">
+						<span class="konx-setup-icon">
+							<?php if ( 'complete' === $item['status'] ) : ?>
+								<span class="dashicons dashicons-yes-alt" style="color:var(--konx-success);"></span>
+							<?php elseif ( 'attention' === $item['status'] ) : ?>
+								<span class="dashicons dashicons-warning" style="color:var(--konx-warning);"></span>
+							<?php else : ?>
+								<span class="dashicons dashicons-marker" style="color:var(--konx-muted,#787c82);"></span>
+							<?php endif; ?>
+						</span>
+						<div class="konx-setup-item-body">
+							<strong><?php echo esc_html( $item['label'] ); ?></strong>
+							<span class="konx-setup-detail"><?php echo esc_html( $item['detail'] ); ?></span>
+						</div>
+						<a href="<?php echo esc_url( $item['url'] ); ?>" class="button button-small">
+							<?php echo 'complete' === $item['status']
+								? esc_html__( 'Open', 'konx-affiliate-dashboard' )
+								: ( $item['required'] ? esc_html__( 'Configure', 'konx-affiliate-dashboard' ) : esc_html__( 'Review', 'konx-affiliate-dashboard' ) ); ?>
+						</a>
+					</div>
+				<?php endforeach; ?>
+			</div>
+		</div>
+
+		<!-- Quick Access Cards -->
+		<div class="konx-grid-3 konx-setup-cards">
+			<?php
+			// Build config cards from checklist items + Help Center.
+			$config_cards = array();
+			foreach ( $setup['items'] as $item ) {
+				$config_cards[] = array(
+					'title'  => $item['label'],
+					'detail' => $item['detail'],
+					'url'    => $item['url'],
+					'status' => $item['status'],
+				);
+			}
+			$config_cards[] = array(
+				'title'  => __( 'Help Center', 'konx-affiliate-dashboard' ),
+				'detail' => __( 'Getting Started', 'konx-affiliate-dashboard' ),
+				'url'    => admin_url( 'admin.php?page=konx-help-center' ),
+				'status' => 'complete',
+			);
+
+			foreach ( $config_cards as $card ) : ?>
+				<a href="<?php echo esc_url( $card['url'] ); ?>" class="konx-config-card">
+					<span class="konx-config-status">
+						<?php if ( 'complete' === $card['status'] ) : ?>
+							<span class="dashicons dashicons-yes-alt" style="color:var(--konx-success);"></span>
+						<?php elseif ( 'attention' === $card['status'] ) : ?>
+							<span class="dashicons dashicons-warning" style="color:var(--konx-warning);"></span>
+						<?php else : ?>
+							<span class="dashicons dashicons-marker" style="color:var(--konx-muted,#787c82);"></span>
+						<?php endif; ?>
+					</span>
+					<strong><?php echo esc_html( $card['title'] ); ?></strong>
+					<span class="konx-config-detail"><?php echo esc_html( $card['detail'] ); ?></span>
+				</a>
+			<?php endforeach; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Find a published page containing a shortcode.
+	 *
+	 * @param string $shortcode The shortcode name (without brackets).
+	 * @return int|null Page ID or null.
+	 */
+	private static function find_page_with_shortcode( $shortcode ) {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$id = $wpdb->get_var( $wpdb->prepare(
+			"SELECT ID FROM {$wpdb->posts} WHERE post_type = 'page' AND post_status = 'publish' AND post_content LIKE %s LIMIT 1",
+			'%[' . $wpdb->esc_like( $shortcode ) . ']%'
+		) );
+
+		return $id ? (int) $id : null;
+	}
+
+	// ------------------------------------------------------------------
+	// Overview Statistics
+	// ------------------------------------------------------------------
 
 	private static function get_overview_stats() {
 		global $wpdb;
