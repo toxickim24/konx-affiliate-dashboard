@@ -2,7 +2,7 @@
 /**
  * Custom roles and capabilities for KonX Affiliate Dashboard.
  *
- * Creates five affiliate roles (one per affiliate type) and assigns
+ * Creates four affiliate roles (one per affiliate type) and assigns
  * custom capabilities. Admin capabilities are added to the administrator role.
  *
  * @package KonxAffiliateDashboard
@@ -24,7 +24,6 @@ class Konx_Roles {
 	 */
 	private static $affiliate_roles = array(
 		'konx_business_affiliate' => 'KonX Business Affiliate',
-		'konx_referral_affiliate' => 'KonX Referral Affiliate',
 		'konx_team_agent'         => 'KonX Team Agent',
 		'konx_marketing_agent'    => 'KonX Marketing Agent',
 		'konx_sales_agent'        => 'KonX Sales Agent',
@@ -141,7 +140,6 @@ class Konx_Roles {
 	public static function role_to_affiliate_type( $role_slug ) {
 		$map = array(
 			'konx_business_affiliate' => 'business',
-			'konx_referral_affiliate' => 'referral',
 			'konx_team_agent'         => 'team_agent',
 			'konx_marketing_agent'    => 'marketing_agent',
 			'konx_sales_agent'        => 'sales_agent',
@@ -159,7 +157,6 @@ class Konx_Roles {
 	public static function affiliate_type_to_role( $affiliate_type ) {
 		$map = array(
 			'business'        => 'konx_business_affiliate',
-			'referral'        => 'konx_referral_affiliate',
 			'team_agent'      => 'konx_team_agent',
 			'marketing_agent' => 'konx_marketing_agent',
 			'sales_agent'     => 'konx_sales_agent',

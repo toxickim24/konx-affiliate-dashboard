@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Konx_Financial_Audit {
 
 	public static function init() {
-		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
+		// Menu registered by Konx_Tools_Page.
 	}
 
 	public static function register_menu() {
@@ -33,7 +33,13 @@ class Konx_Financial_Audit {
 		if ( ! current_user_can( 'manage_konx_commissions' ) ) {
 			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
 		}
+		echo '<div class="wrap"><h1>' . esc_html__( 'Financial Audit', 'konx-affiliate-dashboard' ) . '</h1>';
+		self::render_content();
+		echo '</div>';
+	}
 
+	/** Render inner content (used by Tools page). */
+	public static function render_content() {
 		$checks = self::run_audit();
 		$errors   = 0;
 		$warnings = 0;
@@ -43,11 +49,6 @@ class Konx_Financial_Audit {
 		}
 
 		?>
-		<div class="wrap">
-			<div class="konx-page-header">
-				<h1><?php esc_html_e( 'Financial Audit', 'konx-affiliate-dashboard' ); ?></h1>
-			</div>
-
 			<!-- Summary -->
 			<div class="konx-stats-grid" style="margin-bottom:20px;">
 				<div class="konx-stat-card">
@@ -89,7 +90,6 @@ class Konx_Financial_Audit {
 					</tbody>
 				</table>
 			</div>
-		</div>
 		<?php
 	}
 
