@@ -2,9 +2,10 @@
 /**
  * WooCommerce My Account integration.
  *
- * Adds an "Affiliate Dashboard" tab to the WooCommerce My Account
- * navigation for approved affiliates. Non-affiliates never see
- * the menu item.
+ * Adds an "Affiliate Dashboard" tab for approved affiliates and a
+ * "Become an Affiliate" tab for non-affiliates to the WooCommerce
+ * My Account navigation. Pending affiliates see a review notice
+ * instead of the Apply Now CTA.
  *
  * @package KonxAffiliateDashboard
  */
@@ -19,11 +20,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Konx_My_Account {
 
 	/**
-	 * Endpoint slug used in WooCommerce My Account URLs.
+	 * Endpoint slug for the Affiliate Dashboard.
 	 *
 	 * @var string
 	 */
 	const ENDPOINT = 'affiliate-dashboard';
+
+	/**
+	 * Menu item key for the "Become an Affiliate" link.
+	 *
+	 * Not a WooCommerce endpoint — it links to the registration page.
+	 *
+	 * @var string
+	 */
+	const BECOME_AFFILIATE_KEY = 'become-an-affiliate';
 
 	/**
 	 * Register hooks.
@@ -32,11 +42,17 @@ class Konx_My_Account {
 		// Register the rewrite endpoint (must run on init, before rewrite rules are matched).
 		add_action( 'init', array( __CLASS__, 'register_endpoint' ) );
 
-		// Add the menu item (affiliates only).
+		// Add menu items (affiliate dashboard OR become-an-affiliate).
 		add_filter( 'woocommerce_account_menu_items', array( __CLASS__, 'add_menu_item' ), 10, 1 );
 
-		// Render the endpoint content.
+		// Override URL for the "Become an Affiliate" menu item to point to registration page.
+		add_filter( 'woocommerce_get_endpoint_url', array( __CLASS__, 'override_become_affiliate_url' ), 10, 4 );
+
+		// Render the affiliate dashboard endpoint content.
 		add_action( 'woocommerce_account_' . self::ENDPOINT . '_endpoint', array( __CLASS__, 'render_endpoint' ) );
+
+		// Dashboard CTA for non-affiliates / pending notice.
+		add_action( 'woocommerce_account_dashboard', array( __CLASS__, 'render_dashboard_cta' ) );
 
 		// Set the page title when viewing the endpoint.
 		add_filter( 'the_title', array( __CLASS__, 'endpoint_title' ), 10, 2 );
@@ -79,11 +95,16 @@ class Konx_My_Account {
 		set_transient( 'konx_flush_my_account_endpoint', '1', 60 );
 	}
 
+	// ------------------------------------------------------------------
+	// Menu Items
+	// ------------------------------------------------------------------
+
 	/**
-	 * Add "Affiliate Dashboard" to the WooCommerce My Account menu.
+	 * Add affiliate-related menu items to WooCommerce My Account.
 	 *
-	 * Only visible to users who have an active affiliate record.
-	 * Placed just before "Logout" in the navigation.
+	 * - Approved/active affiliates see "Affiliate Dashboard".
+	 * - Non-affiliates see "Become an Affiliate" (if registration page exists).
+	 * - Pending affiliates see "Affiliate Dashboard" (endpoint shows status).
 	 *
 	 * @param array $items Existing menu items.
 	 * @return array Modified menu items.
@@ -94,26 +115,114 @@ class Konx_My_Account {
 		}
 
 		$affiliate = Konx_Affiliate_Manager::get_affiliate_by_user( get_current_user_id() );
-		if ( ! $affiliate ) {
-			return $items;
+
+		if ( $affiliate ) {
+			// Affiliate exists (any status) — show "Affiliate Dashboard".
+			return self::insert_before_logout( $items, self::ENDPOINT, __( 'Affiliate Dashboard', 'konx-affiliate-dashboard' ) );
 		}
 
-		// Insert "Affiliate Dashboard" before "Logout".
-		$new_items = array();
-		foreach ( $items as $key => $label ) {
-			if ( 'customer-logout' === $key ) {
-				$new_items[ self::ENDPOINT ] = __( 'Affiliate Dashboard', 'konx-affiliate-dashboard' );
-			}
-			$new_items[ $key ] = $label;
+		// Non-affiliate — show "Become an Affiliate" if a registration page exists.
+		$reg_url = self::get_registration_page_url();
+		if ( $reg_url ) {
+			return self::insert_before_logout( $items, self::BECOME_AFFILIATE_KEY, __( 'Become an Affiliate', 'konx-affiliate-dashboard' ) );
 		}
 
-		// Fallback: if "customer-logout" wasn't in the array, append.
-		if ( ! isset( $new_items[ self::ENDPOINT ] ) ) {
-			$new_items[ self::ENDPOINT ] = __( 'Affiliate Dashboard', 'konx-affiliate-dashboard' );
-		}
-
-		return $new_items;
+		return $items;
 	}
+
+	/**
+	 * Override the URL for the "Become an Affiliate" menu item.
+	 *
+	 * WooCommerce builds endpoint URLs from slugs. Since "become-an-affiliate"
+	 * is not a real endpoint, we redirect its URL to the registration page.
+	 *
+	 * @param string $url       The endpoint URL.
+	 * @param string $endpoint  The endpoint slug.
+	 * @param string $value     The endpoint value.
+	 * @param string $permalink The base permalink.
+	 * @return string Modified URL.
+	 */
+	public static function override_become_affiliate_url( $url, $endpoint, $value, $permalink ) {
+		if ( self::BECOME_AFFILIATE_KEY === $endpoint ) {
+			$reg_url = self::get_registration_page_url();
+			if ( $reg_url ) {
+				return $reg_url;
+			}
+		}
+		return $url;
+	}
+
+	// ------------------------------------------------------------------
+	// Dashboard CTA
+	// ------------------------------------------------------------------
+
+	/**
+	 * Render a CTA card on the My Account dashboard.
+	 *
+	 * - Non-affiliates: "Become a KonX Affiliate" card with Apply Now button.
+	 * - Pending affiliates: "Application under review" notice.
+	 * - Active affiliates: nothing (they use the Affiliate Dashboard tab).
+	 */
+	public static function render_dashboard_cta() {
+		if ( ! is_user_logged_in() ) {
+			return;
+		}
+
+		$affiliate = Konx_Affiliate_Manager::get_affiliate_by_user( get_current_user_id() );
+
+		if ( $affiliate && 'pending' === $affiliate->status ) {
+			self::render_pending_notice();
+			return;
+		}
+
+		if ( $affiliate ) {
+			// Active/inactive/suspended — the dashboard tab handles everything.
+			return;
+		}
+
+		// Non-affiliate — show "Become an Affiliate" CTA.
+		self::render_become_affiliate_card();
+	}
+
+	/**
+	 * Render the "Become a KonX Affiliate" CTA card.
+	 */
+	private static function render_become_affiliate_card() {
+		$reg_url = self::get_registration_page_url();
+		if ( ! $reg_url ) {
+			return;
+		}
+
+		printf(
+			'<div style="background:#f0f6fc;border:1px solid #72aee6;border-radius:6px;padding:20px 24px;margin-bottom:20px;">'
+			. '<h3 style="margin:0 0 8px;font-size:16px;color:#1d2327;">%s</h3>'
+			. '<p style="margin:0 0 14px;color:#50575e;">%s</p>'
+			. '<a href="%s" style="display:inline-block;background:#2271b1;color:#fff;padding:10px 20px;border-radius:4px;text-decoration:none;font-weight:600;font-size:14px;">%s</a>'
+			. '</div>',
+			esc_html__( 'Become a KonX Affiliate', 'konx-affiliate-dashboard' ),
+			esc_html__( 'Earn commissions by sharing your referral link and helping others discover KonX.', 'konx-affiliate-dashboard' ),
+			esc_url( $reg_url ),
+			esc_html__( 'Apply Now', 'konx-affiliate-dashboard' )
+		);
+	}
+
+	/**
+	 * Render the "Application under review" notice for pending affiliates.
+	 */
+	private static function render_pending_notice() {
+		printf(
+			'<div style="background:#fcf9e8;border:1px solid #dba617;border-radius:6px;padding:20px 24px;margin-bottom:20px;">'
+			. '<h3 style="margin:0 0 8px;font-size:16px;color:#1d2327;">%s</h3>'
+			. '<p style="margin:0;color:#50575e;">%s</p>'
+			. '</div>',
+			esc_html__( 'Your affiliate application is under review.', 'konx-affiliate-dashboard' ),
+			esc_html__( 'We will notify you once your application has been reviewed.', 'konx-affiliate-dashboard' )
+		);
+	}
+
+	// ------------------------------------------------------------------
+	// Endpoint Content
+	// ------------------------------------------------------------------
 
 	/**
 	 * Render the Affiliate Dashboard content inside My Account.
@@ -144,6 +253,10 @@ class Konx_My_Account {
 		echo Konx_Dashboard::render_shortcode();
 	}
 
+	// ------------------------------------------------------------------
+	// Page Title
+	// ------------------------------------------------------------------
+
 	/**
 	 * Set the page title for the endpoint.
 	 *
@@ -169,6 +282,10 @@ class Konx_My_Account {
 
 		return $title;
 	}
+
+	// ------------------------------------------------------------------
+	// Assets
+	// ------------------------------------------------------------------
 
 	/**
 	 * Enqueue dashboard CSS/JS when viewing the affiliate-dashboard endpoint.
@@ -211,5 +328,57 @@ class Konx_My_Account {
 			KONX_AFFILIATE_VERSION,
 			true
 		);
+	}
+
+	// ------------------------------------------------------------------
+	// Helpers
+	// ------------------------------------------------------------------
+
+	/**
+	 * Insert a menu item before "Logout" in the My Account menu.
+	 *
+	 * @param array  $items Existing menu items.
+	 * @param string $key   The menu item key.
+	 * @param string $label The menu item label.
+	 * @return array Modified menu items.
+	 */
+	private static function insert_before_logout( $items, $key, $label ) {
+		$new_items = array();
+		foreach ( $items as $item_key => $item_label ) {
+			if ( 'customer-logout' === $item_key ) {
+				$new_items[ $key ] = $label;
+			}
+			$new_items[ $item_key ] = $item_label;
+		}
+
+		// Fallback: if "customer-logout" wasn't in the array, append.
+		if ( ! isset( $new_items[ $key ] ) ) {
+			$new_items[ $key ] = $label;
+		}
+
+		return $new_items;
+	}
+
+	/**
+	 * Get the URL of the affiliate registration page.
+	 *
+	 * Finds the published page containing the [konx_affiliate_register] shortcode.
+	 *
+	 * @return string|false Registration page URL, or false if not found.
+	 */
+	private static function get_registration_page_url() {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$page_id = $wpdb->get_var(
+			"SELECT ID FROM {$wpdb->posts} WHERE post_type = 'page' AND post_status = 'publish' AND post_content LIKE '%[konx_affiliate_register]%' LIMIT 1"
+		);
+
+		if ( ! $page_id ) {
+			return false;
+		}
+
+		$url = get_permalink( (int) $page_id );
+		return $url ? $url : false;
 	}
 }
