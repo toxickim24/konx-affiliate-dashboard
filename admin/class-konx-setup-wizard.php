@@ -140,7 +140,7 @@ class Konx_Setup_Wizard {
 				'title'       => __( 'Map WooCommerce Products', 'konx-affiliate-dashboard' ),
 				'description' => __( 'Map your products to commission categories (Starter Pack, Pro Pack, etc.).', 'konx-affiliate-dashboard' ),
 				'done'        => $mappings > 0,
-				'url'         => admin_url( 'admin.php?page=konx-product-mapping' ),
+				'url'         => admin_url( 'admin.php?page=konx-settings&tab=product-mapping' ),
 				'action'      => __( 'Map Products', 'konx-affiliate-dashboard' ),
 			),
 			array(
@@ -154,7 +154,7 @@ class Konx_Setup_Wizard {
 				'title'       => __( 'Run System Check', 'konx-affiliate-dashboard' ),
 				'description' => __( 'Verify all database tables, roles, and requirements are in place.', 'konx-affiliate-dashboard' ),
 				'done'        => true, // Always done since activation creates everything.
-				'url'         => admin_url( 'admin.php?page=konx-system-status' ),
+				'url'         => admin_url( 'admin.php?page=konx-settings&tab=system-status' ),
 				'action'      => __( 'Check', 'konx-affiliate-dashboard' ),
 			),
 		);

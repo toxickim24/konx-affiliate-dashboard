@@ -218,20 +218,24 @@ function konx_affiliate_init() {
 		Konx_Admin_Fees_Page::init();
 		Konx_Withdrawals_Page::init();
 		Konx_Reports_Page::init();
-		Konx_Settings_Page::init();
-		Konx_Admin_Product_Mapping::init();
+		Konx_Settings_Page::init();         // Tabbed: Dashboard, General, API Keys, Product Mapping, Migration, System Status.
+		Konx_Help_Center::init();
 
-		// Tools page (tabs: notifications, activity log, financial audit, api keys, system status, help).
-		Konx_Tools_Page::init();
-		Konx_Notification_Center::init();
+		// Form handlers for Settings sub-tabs (no visible sidebar items).
+		Konx_Admin_Product_Mapping::init();
 		Konx_Api_Keys_Page::init();
+		Konx_Notification_Center::init();
+
+		// Tools page.
+		Konx_Tools_Page::init();
+
+		// Hidden pages (accessible via direct URL for backward compatibility).
+		Konx_Migration_Wizard::init();
+		Konx_System_Status::init();
 
 		// Utilities (no menu, handlers only).
 		Konx_Export_Manager::init();
 		Konx_Setup_Wizard::init();
-
-		// Migration wizard.
-		Konx_Migration_Wizard::init();
 	}
 }
 add_action( 'plugins_loaded', 'konx_affiliate_init' );
