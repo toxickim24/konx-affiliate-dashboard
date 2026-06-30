@@ -31,6 +31,9 @@ class Konx_Install {
 		update_option( 'konx_affiliate_version', KONX_AFFILIATE_VERSION );
 		update_option( 'konx_affiliate_db_version', KONX_AFFILIATE_DB_VERSION );
 
+		// Schedule rewrite flush for My Account endpoint.
+		Konx_My_Account::schedule_flush();
+
 		// Trigger setup wizard on first activation.
 		if ( class_exists( 'Konx_Setup_Wizard' ) ) {
 			Konx_Setup_Wizard::set_activation_redirect();

@@ -10,53 +10,126 @@ Place this shortcode on any WordPress page. It renders the full
 affiliate dashboard for logged-in affiliates. Compatible with
 Elementor — use a Shortcode widget or text editor block.
 
-## Displayed Sections
+Also accessible via WooCommerce My Account at `/my-account/affiliate-dashboard/`.
 
-### 1. Profile & Referral
+## Portal Navigation
 
-- Affiliate type (Business, Referral, Team Agent, etc.)
-- Account status
-- Referral code
-- Referral link with copy-to-clipboard button
-- Member since date
+The dashboard is structured as an Affiliate Portal with sidebar navigation on desktop and a collapsible menu on tablet/mobile.
 
-### 2. Financial Summary
+### Navigation Items
 
-Four stat cards:
-- **Total Earnings** — lifetime sum of all credits
-- **Available Balance** — current withdrawable balance
-- **Total Withdrawn** — sum of completed withdrawals
-- **Total Sales** — completed sales count
+| Nav Item | Anchor | Content |
+|---|---|---|
+| Overview | `#overview` | Stats cards, milestone progress, referral activity placeholder |
+| Referral Tools | `#referral-tools` | Referral code/link, copy buttons, social sharing |
+| Financial Activity | `#financial-activity` | Bonus history, commissions/withdrawals tabs, admin fees |
+| Achievements | `#achievements` | Milestone count, journey steps, progress bar |
+| Commission Rates | `#commission-rates` | Rate card by product type |
+| Profile Settings | `#profile-settings` | Wise payment email form |
 
-### 3. Milestone Progress
+### Active Section Highlighting
 
-- Progress bar toward next 100-sale milestone
-- Sales in current block / 100
-- Milestones achieved count
-- Estimated next bonus (sum of approved commissions in current block)
-- Bonus history table (milestone number, block range, amount, status, date)
+Uses `IntersectionObserver` (vanilla JavaScript, no jQuery) to automatically highlight the current section in the sidebar as the user scrolls. The observer uses `rootMargin: '-20% 0px -60% 0px'` to trigger when a section enters the upper portion of the viewport.
 
-### 4. Recent Commissions
+### Smooth Scrolling
 
-Table showing the 10 most recent commissions:
-- Date, type (one-time/recurring), product, price, rate, commission, status
+Clicking a nav link smooth-scrolls to the target section using `scrollIntoView({ behavior: 'smooth' })`. On mobile, the nav menu auto-closes after clicking a link.
 
-### 5. Withdrawals
+## Dashboard Layout
 
-- **If no pending request**: withdrawal form with:
-  - Amount (min/max validated)
-  - Wise email (pre-filled from affiliate profile)
-  - Account holder name
-  - Currency
-  - Notes
-- **If pending/approved request**: info message with amount and status
-- Withdrawal history table (date, amount, status, processed date)
+### 1. Hero Bar (Full Width, Above Portal)
 
-### 6. Admin Fee Status
+Compact gradient bar:
+- Welcome message with affiliate's first name
+- Status badge (Active/Pending/etc.)
+- Affiliate type label
+- Referral code (monospace, pill-styled)
+- Copy Referral Link button
+- Log Out button
 
-Only shown if there are unpaid or overdue fees:
-- Unpaid count, overdue count, total outstanding
-- Message to contact administrator
+### 2. Portal Layout (Sidebar + Content)
+
+**Desktop:** Two-column grid — 200px sticky sidebar + flexible content area.
+**Tablet/Mobile:** Single column with collapsible menu toggle.
+
+### 3. Overview Section (`#overview`)
+
+- **Statistics Cards**: Available Balance (with Request Withdrawal CTA), Total Earnings, Total Sales, Withdrawn
+- **Milestone Progress**: Sales count, progress bar, estimated next bonus
+- **Recent Referral Activity**: Coming Soon placeholder
+
+### 4. Referral Tools Section (`#referral-tools`)
+
+- Referral Code input with Copy button
+- Referral Link input with Copy button
+- Share row: Facebook, X/Twitter, LinkedIn, Email
+
+### 5. Financial Activity Section (`#financial-activity`)
+
+- Milestone Bonus History table (conditional)
+- Financial Activity tabs: Commissions + Withdrawals
+- Admin Fee Status (conditional)
+
+### 6. Achievements Section (`#achievements`)
+
+- Milestone count + label
+- Achievement progress bar
+- Journey step checklist
+- Next step hint
+
+### 7. Commission Rates Section (`#commission-rates`)
+
+- Rate card table by product type
+
+### 8. Profile Settings Section (`#profile-settings`)
+
+- Wise Payment Email form
+
+## Responsive Behavior
+
+| Breakpoint | Sidebar | Cards | Layout |
+|---|---|---|---|
+| >900px (Desktop) | Sticky sidebar, always visible | 4 columns | Two-column portal |
+| 768-900px (Tablet) | Collapsible menu | 2x2 grid | Single column |
+| <480px (Mobile) | Collapsible menu | 1 column | Single column |
+
+### Mobile Navigation
+
+On tablet and mobile, the sidebar is replaced by:
+- A full-width "Affiliate Portal Menu" toggle button
+- Clicking it reveals/hides the nav menu
+- Clicking a nav link closes the menu and smooth-scrolls to the section
+- Uses `aria-expanded` and `aria-controls` for accessibility
+
+## Anchor Structure
+
+Each major section uses a `<section>` element with a unique `id`:
+
+```html
+<section id="overview" class="konx-portal-section">
+<section id="referral-tools" class="konx-portal-section">
+<section id="financial-activity" class="konx-portal-section">
+<section id="achievements" class="konx-portal-section">
+<section id="commission-rates" class="konx-portal-section">
+<section id="profile-settings" class="konx-portal-section">
+```
+
+All sections have `scroll-margin-top: 20px` to prevent content from being hidden behind fixed headers.
+
+## Future Section Strategy
+
+The navigation structure supports easy addition of new sections. To add a future section:
+
+1. Add a `<li>` to `.konx-portal-menu` with the new anchor
+2. Add a `<section id="..." class="konx-portal-section">` to `.konx-portal-content`
+3. The IntersectionObserver automatically picks up new sections
+
+Planned future sections:
+- Recent Referral Activity (replace placeholder)
+- Team Statistics
+- Withdrawal History (dedicated section)
+- Documents
+- Notifications
 
 ## Permissions
 
@@ -64,34 +137,7 @@ Only shown if there are unpaid or overdue fees:
 |---|---|
 | Not logged in | Login prompt with link |
 | Logged in, not an affiliate | Message to contact admin |
-| Logged in affiliate | Full dashboard |
-
-The affiliate can only see **their own data**. All queries filter
-by affiliate_id. No cross-affiliate data exposure.
-
-## Withdrawal Flow
-
-```
-1. Affiliate fills out withdrawal form
-2. Form POSTs to admin-post.php (action: konx_affiliate_withdrawal)
-3. Konx_Dashboard::handle_withdrawal_form() runs:
-   a. Verify user is logged in
-   b. Verify user is an affiliate
-   c. Verify nonce (per-affiliate: konx_withdrawal_request_{id})
-   d. Sanitize all inputs
-   e. Call Konx_Withdrawals::create_request()
-   f. Set feedback transient (success or error)
-   g. Redirect back to the dashboard page
-4. Dashboard re-renders with feedback message
-```
-
-### Validation (by Konx_Withdrawals::create_request)
-
-- Amount >= minimum ($50 default)
-- Amount <= available balance
-- No pending/approved withdrawal exists
-- Valid Wise email
-- Valid affiliate
+| Logged in affiliate | Full portal dashboard |
 
 ## Security
 
@@ -102,8 +148,7 @@ by affiliate_id. No cross-affiliate data exposure.
 | Data isolation | All queries scoped to affiliate_id |
 | Withdrawal nonce | Per-affiliate: `konx_withdrawal_request_{affiliate_id}` |
 | Input sanitization | `sanitize_text_field()`, `sanitize_email()`, `sanitize_textarea_field()` |
-| Output escaping | `esc_html()`, `esc_attr()`, `esc_url()`, `esc_js()`, `wp_kses()` |
-| No direct SQL in view | View only reads `$data` array prepared by the class |
+| Output escaping | `esc_html()`, `esc_attr()`, `esc_url()`, `esc_js()` |
 | CSS scoped | All styles under `.konx-dashboard` to avoid theme conflicts |
 
 ## CSS
@@ -111,87 +156,46 @@ by affiliate_id. No cross-affiliate data exposure.
 Stylesheet: `assets/css/konx-dashboard.css`
 
 - Loaded only on pages containing the shortcode (`has_shortcode()`)
+- Also loaded on My Account affiliate-dashboard endpoint
 - Scoped under `.konx-dashboard` wrapper
-- Responsive: collapses to 2-column grid on mobile
-- Uses WordPress admin color palette for consistency
+- Portal layout uses CSS Grid
+- Responsive at 900px, 768px, 480px breakpoints
+- Sidebar uses `position: sticky` (desktop only)
 - Works inside Elementor containers
 
 ## Testing Checklist
 
-### Access Control
+### Portal Navigation
 
-- [ ] Not logged in -> login prompt shown
-- [ ] Logged in non-affiliate -> "no affiliate account" message
-- [ ] Logged in affiliate -> full dashboard rendered
+- [ ] Sidebar visible on desktop (>900px)
+- [ ] Sidebar sticky while scrolling
+- [ ] Active section highlighted as user scrolls
+- [ ] Smooth scroll on nav link click
+- [ ] Mobile toggle button visible on tablet/mobile
+- [ ] Mobile nav opens/closes
+- [ ] Mobile nav closes after link click
+- [ ] Keyboard navigation works (Tab, Enter)
+- [ ] `aria-expanded` toggles correctly
 
-### Profile Section
+### Section Anchors
 
-- [ ] Correct affiliate type displayed
-- [ ] Correct referral code displayed
-- [ ] Referral link is correct (home_url/?ref=CODE)
-- [ ] Copy button works (copies URL to clipboard)
-- [ ] Member since date formatted correctly
-
-### Financial Summary
-
-- [ ] Total earnings matches `get_lifetime_earnings()`
-- [ ] Available balance matches `get_available_balance()`
-- [ ] Total withdrawn matches `get_total_withdrawals()`
-- [ ] Total sales matches `completed_sales`
-
-### Milestone Progress
-
-- [ ] Progress bar width matches percent_complete
-- [ ] Sales in block / 100 displayed correctly
-- [ ] Milestones achieved count correct
-- [ ] Estimated next bonus calculated from current block
-- [ ] Bonus history table shows past milestones
-
-### Commission History
-
-- [ ] Shows most recent 10 commissions
-- [ ] Commission type (one-time/recurring) displayed
-- [ ] Product type displayed
-- [ ] Amount and rate correct
-- [ ] Status colored (approved=green, blocked=red, etc.)
-- [ ] "Showing X of Y" message when more than 10
-
-### Withdrawal Form
-
-- [ ] Form visible when no pending request
-- [ ] Form hidden when pending/approved request exists
-- [ ] Pending request info shown with amount and status
-- [ ] Min amount enforced in HTML input
-- [ ] Max amount set to available balance
-- [ ] Wise email pre-filled from affiliate profile
-- [ ] Submit creates withdrawal request
-- [ ] Success message shown after submission
-- [ ] Error message shown for insufficient balance
-- [ ] Error message shown for below minimum
-- [ ] Error message shown for existing pending request
-
-### Withdrawal History
-
-- [ ] Shows recent withdrawal requests
-- [ ] Status colored correctly
-- [ ] Processed date shown or dash for pending
-
-### Admin Fee Status
-
-- [ ] Section hidden when fees are paid
-- [ ] Section visible when unpaid/overdue fees exist
-- [ ] Banner at top warns commissions are paused
-- [ ] Outstanding amount displayed correctly
-
-### Escaping
-
-- [ ] No unescaped output in the view file
-- [ ] All `$data` values escaped with `esc_html()` or `esc_attr()`
-- [ ] Status HTML uses `wp_kses()` with allowed span/style
+- [ ] Direct URL with #anchor scrolls to section
+- [ ] All 6 anchors resolve correctly
+- [ ] `scroll-margin-top` prevents content cutoff
 
 ### Responsive
 
-- [ ] Dashboard readable on mobile (< 600px)
-- [ ] Stats grid collapses to 2 columns
-- [ ] Tables scroll horizontally if needed
-- [ ] Withdrawal form full-width on mobile
+- [ ] Desktop: sidebar + content side by side
+- [ ] Tablet: toggle menu, single column
+- [ ] Mobile: toggle menu, single column, cards stack
+- [ ] No horizontal overflow at any breakpoint
+
+### Content Integrity
+
+- [ ] All existing calculations unchanged
+- [ ] All data values display correctly
+- [ ] Commission table shows recent 10
+- [ ] Withdrawal form works
+- [ ] Profile form works
+- [ ] Tab switching works
+- [ ] Copy buttons work
