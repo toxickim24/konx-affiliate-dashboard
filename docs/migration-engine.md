@@ -3,10 +3,15 @@
 Backend engine for importing PowerOf10 users into KonX Affiliates.
 Read-only analysis and dry-run simulation — no data writes.
 
-## Data Source
+## Data Sources
 
-PowerOf10 Laravel database (`powerof10.biz`), accessed via cross-database
-query using the WordPress `$wpdb` connection.
+The engine supports two data sources:
+
+- **CSV Upload** (recommended for production) — parsed via `load_from_csv()`
+- **Local Database** (developer/staging only) — cross-database query via `$wpdb`
+
+All 8 analysis methods work identically regardless of source via the
+`get_source_records()` abstraction. See `csv-import.md` for CSV details.
 
 ### Field Mapping
 
