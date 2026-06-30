@@ -91,7 +91,7 @@ if ( ! empty( $_GET['ref'] ) ) { // phpcs:ignore WordPress.Security.NonceVerific
 					</option>
 				<?php endforeach; ?>
 			</select>
-			<small><?php esc_html_e( 'Referral Affiliates are activated immediately. Business Affiliates require a Starter Pack ($100), Pro Pack ($200), or eCard Pack ($500) purchase before activation.', 'konx-affiliate-dashboard' ); ?></small>
+			<small><?php esc_html_e( 'Business Affiliates require a Starter Pack ($100), Pro Pack ($200), or eCard Pack ($500) purchase before activation.', 'konx-affiliate-dashboard' ); ?></small>
 		</div>
 
 		<div class="konx-reg-row">

@@ -30,7 +30,7 @@ class Konx_Affiliate_Manager {
 	 *
 	 * @var array
 	 */
-	private static $valid_types = array( 'business', 'referral', 'team_agent', 'marketing_agent', 'sales_agent' );
+	private static $valid_types = array( 'business', 'team_agent', 'marketing_agent', 'sales_agent' );
 
 	// ------------------------------------------------------------------
 	// Create
@@ -49,11 +49,14 @@ class Konx_Affiliate_Manager {
 	 *
 	 *     @type int    $parent_affiliate_id Referring affiliate ID.
 	 *     @type string $payment_email       Wise payout email.
+	 *     @type string $external_id         External system ID (e.g. 'po10_2305').
+	 *     @type string $phone               Phone number.
+	 *     @type string $referral_code       Override the auto-generated referral code.
 	 *     @type string $notes               Admin notes.
 	 * }
 	 * @return int|WP_Error The new affiliate ID, or WP_Error on failure.
 	 */
-	public static function create_affiliate_profile( $user_id, $affiliate_type = 'referral', $args = array() ) {
+	public static function create_affiliate_profile( $user_id, $affiliate_type = 'sales_agent', $args = array() ) {
 		global $wpdb;
 
 		$user_id = absint( $user_id );
@@ -71,9 +74,19 @@ class Konx_Affiliate_Manager {
 			return new \WP_Error( 'duplicate_profile', __( 'This user already has an affiliate profile.', 'konx-affiliate-dashboard' ) );
 		}
 
-		$referral_code = self::generate_referral_code();
-		$table         = $wpdb->prefix . 'konx_affiliates';
-		$now           = current_time( 'mysql', true );
+		// Allow callers to supply a referral code (e.g. imported PO10 team_name).
+		if ( ! empty( $args['referral_code'] ) ) {
+			$referral_code = sanitize_text_field( $args['referral_code'] );
+			// Verify uniqueness.
+			if ( self::get_affiliate_by_referral_code( $referral_code ) ) {
+				return new \WP_Error( 'duplicate_code', __( 'This referral code is already in use.', 'konx-affiliate-dashboard' ) );
+			}
+		} else {
+			$referral_code = self::generate_referral_code();
+		}
+
+		$table = $wpdb->prefix . 'konx_affiliates';
+		$now   = current_time( 'mysql', true );
 
 		$data = array(
 			'user_id'        => $user_id,
@@ -91,6 +104,12 @@ class Konx_Affiliate_Manager {
 		}
 		if ( ! empty( $args['payment_email'] ) ) {
 			$data['payment_email'] = sanitize_email( $args['payment_email'] );
+		}
+		if ( ! empty( $args['external_id'] ) ) {
+			$data['external_id'] = sanitize_text_field( mb_substr( $args['external_id'], 0, 50 ) );
+		}
+		if ( ! empty( $args['phone'] ) ) {
+			$data['phone'] = sanitize_text_field( mb_substr( $args['phone'], 0, 30 ) );
 		}
 		if ( isset( $args['notes'] ) && '' !== $args['notes'] ) {
 			$data['notes'] = sanitize_textarea_field( $args['notes'] );
@@ -111,6 +130,12 @@ class Konx_Affiliate_Manager {
 			$formats[] = '%d';
 		}
 		if ( isset( $data['payment_email'] ) ) {
+			$formats[] = '%s';
+		}
+		if ( isset( $data['external_id'] ) ) {
+			$formats[] = '%s';
+		}
+		if ( isset( $data['phone'] ) ) {
 			$formats[] = '%s';
 		}
 		if ( isset( $data['notes'] ) ) {

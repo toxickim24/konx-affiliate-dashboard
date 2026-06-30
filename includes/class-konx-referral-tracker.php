@@ -27,7 +27,7 @@ class Konx_Referral_Tracker {
 	/**
 	 * Default cookie lifetime in days (used if settings not configured).
 	 */
-	const DEFAULT_COOKIE_DAYS = 30;
+	const DEFAULT_COOKIE_DAYS = 90;
 
 	/**
 	 * Default duplicate-click suppression window in seconds (used if settings not configured).
@@ -63,7 +63,7 @@ class Konx_Referral_Tracker {
 		}
 
 		$code = strtoupper( sanitize_text_field( wp_unslash( $_GET[ $ref_param ] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		if ( empty( $code ) || strlen( $code ) > 12 ) {
+		if ( empty( $code ) || strlen( $code ) > 50 ) {
 			return;
 		}
 

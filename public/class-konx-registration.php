@@ -25,7 +25,6 @@ class Konx_Registration {
 	 * @var array type => label
 	 */
 	private static $registration_types = array(
-		'referral' => 'Referral Affiliate',
 		'business' => 'Business Affiliate',
 	);
 
@@ -86,7 +85,7 @@ class Konx_Registration {
 		$last_name      = isset( $_POST['last_name'] ) ? sanitize_text_field( wp_unslash( $_POST['last_name'] ) ) : '';
 		$email          = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
 		$password       = isset( $_POST['password'] ) ? $_POST['password'] : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- passwords must not be sanitized.
-		$affiliate_type = isset( $_POST['affiliate_type'] ) ? sanitize_text_field( wp_unslash( $_POST['affiliate_type'] ) ) : 'referral';
+		$affiliate_type = isset( $_POST['affiliate_type'] ) ? sanitize_text_field( wp_unslash( $_POST['affiliate_type'] ) ) : 'business';
 		$wise_email     = isset( $_POST['wise_email'] ) ? sanitize_email( wp_unslash( $_POST['wise_email'] ) ) : '';
 		$terms          = ! empty( $_POST['terms'] );
 		$ref_code       = isset( $_POST['ref_code'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_POST['ref_code'] ) ) ) : '';

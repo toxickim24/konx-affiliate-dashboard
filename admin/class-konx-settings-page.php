@@ -33,7 +33,6 @@ class Konx_Settings_Page {
 	 */
 	private static $affiliate_types = array(
 		'business'        => 'Business Affiliate',
-		'referral'        => 'Referral Affiliate',
 		'team_agent'      => 'Team Agent',
 		'marketing_agent' => 'Marketing Agent',
 		'sales_agent'     => 'Sales Agent',
@@ -84,7 +83,7 @@ class Konx_Settings_Page {
 
 		$recurring_pct = number_format( (float) $recurring * 100, 0 );
 		$min_wd        = ! empty( $general['min_withdrawal'] ) ? $general['min_withdrawal'] : '50.00';
-		$cookie_days   = ! empty( $referral['cookie_days'] ) ? $referral['cookie_days'] : 30;
+		$cookie_days   = ! empty( $referral['cookie_days'] ) ? $referral['cookie_days'] : 90;
 		$ref_param     = ! empty( $referral['ref_param'] ) ? $referral['ref_param'] : 'ref';
 		$dedup_hours   = ! empty( $referral['dedup_hours'] ) ? $referral['dedup_hours'] : 24;
 
@@ -314,7 +313,7 @@ class Konx_Settings_Page {
 		// --- Referral Settings ---
 		$referral = array();
 		if ( isset( $_POST['cookie_days'] ) ) {
-			$referral['cookie_days'] = absint( $_POST['cookie_days'] ) ?: 30;
+			$referral['cookie_days'] = absint( $_POST['cookie_days'] ) ?: 90;
 		}
 		if ( isset( $_POST['ref_param'] ) ) {
 			$referral['ref_param'] = sanitize_key( wp_unslash( $_POST['ref_param'] ) ) ?: 'ref';
@@ -446,7 +445,7 @@ class Konx_Settings_Page {
 	 */
 	public static function get_cookie_days() {
 		$settings = get_option( self::OPT_REFERRAL, array() );
-		return ! empty( $settings['cookie_days'] ) ? absint( $settings['cookie_days'] ) : 30;
+		return ! empty( $settings['cookie_days'] ) ? absint( $settings['cookie_days'] ) : 90;
 	}
 
 	/**

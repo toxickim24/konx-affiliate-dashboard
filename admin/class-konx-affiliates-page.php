@@ -85,7 +85,6 @@ class Konx_Affiliates_Page {
 		$types = array(
 			''                => __( 'All Types', 'konx-affiliate-dashboard' ),
 			'business'        => __( 'Business', 'konx-affiliate-dashboard' ),
-			'referral'        => __( 'Referral', 'konx-affiliate-dashboard' ),
 			'team_agent'      => __( 'Team Agent', 'konx-affiliate-dashboard' ),
 			'marketing_agent' => __( 'Marketing Agent', 'konx-affiliate-dashboard' ),
 			'sales_agent'     => __( 'Sales Agent', 'konx-affiliate-dashboard' ),
@@ -254,7 +253,6 @@ class Konx_Affiliates_Page {
 
 		$all_types = array(
 			'business'        => __( 'Business Affiliate', 'konx-affiliate-dashboard' ),
-			'referral'        => __( 'Referral Affiliate', 'konx-affiliate-dashboard' ),
 			'team_agent'      => __( 'Team Agent', 'konx-affiliate-dashboard' ),
 			'marketing_agent' => __( 'Marketing Agent', 'konx-affiliate-dashboard' ),
 			'sales_agent'     => __( 'Sales Agent', 'konx-affiliate-dashboard' ),
@@ -688,7 +686,7 @@ class Konx_Affiliates_Page {
 		check_admin_referer( 'konx_create_affiliate', 'konx_create_nonce' );
 
 		$user_id        = isset( $_POST['user_id'] ) ? absint( $_POST['user_id'] ) : 0;
-		$affiliate_type = isset( $_POST['affiliate_type'] ) ? sanitize_text_field( wp_unslash( $_POST['affiliate_type'] ) ) : 'referral';
+		$affiliate_type = isset( $_POST['affiliate_type'] ) ? sanitize_text_field( wp_unslash( $_POST['affiliate_type'] ) ) : 'sales_agent';
 		$payment_email  = isset( $_POST['payment_email'] ) ? sanitize_email( wp_unslash( $_POST['payment_email'] ) ) : '';
 
 		if ( ! $user_id ) {

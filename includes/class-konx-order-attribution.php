@@ -203,7 +203,7 @@ class Konx_Order_Attribution {
 		if ( ! empty( $_POST['konx_referral_code'] ) ) {
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing
 			$code = strtoupper( sanitize_text_field( wp_unslash( $_POST['konx_referral_code'] ) ) );
-			if ( ! empty( $code ) && strlen( $code ) <= 12 ) {
+			if ( ! empty( $code ) && strlen( $code ) <= 50 ) {
 				return $code;
 			}
 		}
