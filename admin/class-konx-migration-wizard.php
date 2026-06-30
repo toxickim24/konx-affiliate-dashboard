@@ -27,18 +27,19 @@ class Konx_Migration_Wizard {
 	 * @var array
 	 */
 	private static $steps = array(
-		'welcome'          => 'Welcome',
-		'source'           => 'Data Source',
-		'field-mapping'    => 'Field Mapping',
-		'health'           => 'Health Check',
-		'types'            => 'Type Mapping',
-		'sponsors'         => 'Sponsors',
-		'conflicts'        => 'Conflicts',
-		'validation'       => 'Validation',
+		'welcome'           => 'Welcome',
+		'source'            => 'Data Source',
+		'field-mapping'     => 'Field Mapping',
+		'health'            => 'Health Check',
+		'types'             => 'Type Mapping',
+		'sponsors'          => 'Sponsors',
+		'conflicts'         => 'Conflicts',
+		'validation'        => 'Validation',
 		'source-comparison' => 'Comparison',
-		'preview'          => 'Preview',
-		'dry-run'          => 'Dry Run',
-		'approval'         => 'Approval',
+		'summary'           => 'Summary',
+		'preview'           => 'Preview',
+		'dry-run'           => 'Dry Run',
+		'approval'          => 'Approval',
 	);
 
 	/**
@@ -51,6 +52,7 @@ class Konx_Migration_Wizard {
 		add_action( 'admin_post_konx_migration_run_validation', array( __CLASS__, 'handle_run_validation' ) );
 		add_action( 'admin_post_konx_migration_export_validation', array( __CLASS__, 'handle_export_validation' ) );
 		add_action( 'admin_post_konx_migration_export_comparison', array( __CLASS__, 'handle_export_comparison' ) );
+		add_action( 'admin_post_konx_migration_export_summary', array( __CLASS__, 'handle_export_summary' ) );
 		add_action( 'admin_post_konx_migration_dry_run', array( __CLASS__, 'handle_dry_run' ) );
 		add_action( 'admin_post_konx_migration_approve', array( __CLASS__, 'handle_approve' ) );
 	}
@@ -128,6 +130,9 @@ class Konx_Migration_Wizard {
 						break;
 					case 'source-comparison':
 						self::render_comparison( $state );
+						break;
+					case 'summary':
+						self::render_summary( $state );
 						break;
 					case 'preview':
 						self::render_preview( $state );
@@ -624,7 +629,7 @@ class Konx_Migration_Wizard {
 
 		<?php
 		$can_continue = $vr && ( 0 === $vr['summary']['with_error'] || $vr['summary']['valid'] > 0 );
-		self::render_nav( 'conflicts', $can_continue ? 'preview' : null );
+		self::render_nav( 'conflicts', $can_continue ? 'source-comparison' : null );
 	}
 
 	// ------------------------------------------------------------------
@@ -915,12 +920,13 @@ class Konx_Migration_Wizard {
 			</div>
 		<?php endif; ?>
 
-		<?php self::render_nav( 'sponsors', 'source-comparison' ); ?>
+		<?php self::render_nav( 'sponsors', 'validation' ); ?>
 		<?php
 	}
 
+
 	// ------------------------------------------------------------------
-	// Step 6: Source Comparison
+	// Source Comparison
 	// ------------------------------------------------------------------
 
 	/**
@@ -949,7 +955,7 @@ class Konx_Migration_Wizard {
 
 		if ( empty( $records ) ) {
 			echo '<div class="notice notice-warning inline"><p>' . esc_html__( 'No source records available.', 'konx-affiliate-dashboard' ) . '</p></div>';
-			self::render_nav( 'conflicts', null );
+			self::render_nav( 'validation', null );
 			return;
 		}
 
@@ -1034,7 +1040,168 @@ class Konx_Migration_Wizard {
 			</a>
 		</div>
 
-		<?php self::render_nav( 'conflicts', 'preview' ); ?>
+		<?php self::render_nav( 'validation', 'summary' ); ?>
+		<?php
+	}
+
+	// ------------------------------------------------------------------
+	// Migration Summary
+	// ------------------------------------------------------------------
+
+	/**
+	 * Render the Migration Summary step.
+	 *
+	 * @param array $state Migration state.
+	 */
+	private static function render_summary( $state ) {
+		if ( ! isset( $state['scan'] ) ) {
+			self::render_no_scan();
+			return;
+		}
+
+		$summary   = Konx_Migration_Summary::build( $state );
+		$readiness = $summary['readiness'];
+
+		$status_colors = array(
+			'ready'           => '#00a32a',
+			'needs_attention' => '#dba617',
+			'blocked'         => '#d63638',
+		);
+		$status_icons = array(
+			'ready'           => '&#10003;',
+			'needs_attention' => '&#9888;',
+			'blocked'         => '&#10007;',
+		);
+		$rc = $status_colors[ $readiness['status'] ] ?? '#646970';
+		$ri = $status_icons[ $readiness['status'] ] ?? '&#8226;';
+
+		?>
+		<h2><?php esc_html_e( 'Migration Summary', 'konx-affiliate-dashboard' ); ?></h2>
+		<p class="description"><?php esc_html_e( 'Complete overview of the migration plan. Review before proceeding to the import preview.', 'konx-affiliate-dashboard' ); ?></p>
+
+		<!-- Readiness Banner -->
+		<div style="background:#fff;border:1px solid #c3c4c7;border-left:4px solid <?php echo esc_attr( $rc ); ?>;border-radius:4px;padding:16px;margin:16px 0;display:flex;align-items:center;gap:12px;">
+			<span style="font-size:24px;color:<?php echo esc_attr( $rc ); ?>;"><?php echo $ri; // Safe HTML entity. ?></span>
+			<div>
+				<strong style="font-size:15px;color:<?php echo esc_attr( $rc ); ?>;"><?php echo esc_html( $readiness['label'] ); ?></strong>
+				<?php if ( ! empty( $readiness['reasons'] ) ) : ?>
+					<ul style="margin:4px 0 0 16px;font-size:13px;color:#646970;">
+						<?php foreach ( $readiness['reasons'] as $reason ) : ?>
+							<li><?php echo esc_html( $reason ); ?></li>
+						<?php endforeach; ?>
+					</ul>
+				<?php endif; ?>
+			</div>
+		</div>
+
+		<!-- Record Counts -->
+		<div class="konx-stats-grid" style="margin:16px 0;">
+			<?php self::stat_card( $summary['records']['total'], __( 'Total Records', 'konx-affiliate-dashboard' ), '#2271b1' ); ?>
+			<?php self::stat_card( $summary['records']['valid'], __( 'Valid', 'konx-affiliate-dashboard' ), '#00a32a' ); ?>
+			<?php self::stat_card( $summary['records']['warnings'], __( 'Warnings', 'konx-affiliate-dashboard' ), $summary['records']['warnings'] > 0 ? '#dba617' : '#00a32a' ); ?>
+			<?php self::stat_card( $summary['records']['errors'], __( 'Errors', 'konx-affiliate-dashboard' ), $summary['records']['errors'] > 0 ? '#d63638' : '#00a32a' ); ?>
+		</div>
+
+		<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin:16px 0;">
+
+			<!-- Affiliate Types -->
+			<div style="background:#fff;border:1px solid #c3c4c7;border-radius:6px;padding:16px;">
+				<h3 style="margin:0 0 12px;font-size:14px;display:flex;align-items:center;gap:6px;">
+					<span class="dashicons dashicons-groups" style="color:#2271b1;"></span>
+					<?php esc_html_e( 'Affiliate Types', 'konx-affiliate-dashboard' ); ?>
+				</h3>
+				<?php if ( ! empty( $summary['types'] ) ) : ?>
+					<table style="width:100%;font-size:13px;">
+						<?php foreach ( $summary['types'] as $type => $count ) : ?>
+							<tr>
+								<td style="padding:3px 0;"><?php echo esc_html( ucwords( str_replace( '_', ' ', $type ) ) ); ?></td>
+								<td style="padding:3px 0;text-align:right;font-weight:600;"><?php echo esc_html( number_format( $count ) ); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					</table>
+				<?php else : ?>
+					<p class="description"><?php esc_html_e( 'Run a dry run to see type breakdown.', 'konx-affiliate-dashboard' ); ?></p>
+				<?php endif; ?>
+			</div>
+
+			<!-- Sponsors -->
+			<div style="background:#fff;border:1px solid #c3c4c7;border-radius:6px;padding:16px;">
+				<h3 style="margin:0 0 12px;font-size:14px;display:flex;align-items:center;gap:6px;">
+					<span class="dashicons dashicons-networking" style="color:#2271b1;"></span>
+					<?php esc_html_e( 'Sponsor Hierarchy', 'konx-affiliate-dashboard' ); ?>
+				</h3>
+				<table style="width:100%;font-size:13px;">
+					<tr>
+						<td style="padding:3px 0;"><?php esc_html_e( 'Resolved', 'konx-affiliate-dashboard' ); ?></td>
+						<td style="padding:3px 0;text-align:right;font-weight:600;color:#00a32a;"><?php echo esc_html( number_format( $summary['sponsors']['resolved'] ) ); ?></td>
+					</tr>
+					<tr>
+						<td style="padding:3px 0;"><?php esc_html_e( 'Missing / Orphaned', 'konx-affiliate-dashboard' ); ?></td>
+						<td style="padding:3px 0;text-align:right;font-weight:600;color:<?php echo $summary['sponsors']['missing'] > 0 ? '#dba617' : '#00a32a'; ?>;"><?php echo esc_html( number_format( $summary['sponsors']['missing'] ) ); ?></td>
+					</tr>
+					<tr>
+						<td style="padding:3px 0;"><?php esc_html_e( 'Self-Referrals', 'konx-affiliate-dashboard' ); ?></td>
+						<td style="padding:3px 0;text-align:right;font-weight:600;"><?php echo esc_html( number_format( $summary['sponsors']['self_ref'] ) ); ?></td>
+					</tr>
+				</table>
+				<?php if ( $summary['sponsors']['missing'] > 100 ) : ?>
+					<p style="margin:8px 0 0;font-size:12px;color:#dba617;"><?php printf( esc_html__( '%d orphan references — these affiliates will have no parent.', 'konx-affiliate-dashboard' ), $summary['sponsors']['missing'] ); ?></p>
+				<?php endif; ?>
+			</div>
+
+			<!-- Validation -->
+			<div style="background:#fff;border:1px solid #c3c4c7;border-radius:6px;padding:16px;">
+				<h3 style="margin:0 0 12px;font-size:14px;display:flex;align-items:center;gap:6px;">
+					<span class="dashicons dashicons-yes-alt" style="color:#2271b1;"></span>
+					<?php esc_html_e( 'Validation', 'konx-affiliate-dashboard' ); ?>
+				</h3>
+				<?php if ( $summary['has_validation'] ) : ?>
+					<table style="width:100%;font-size:13px;">
+						<tr>
+							<td style="padding:3px 0;"><?php esc_html_e( 'Errors', 'konx-affiliate-dashboard' ); ?></td>
+							<td style="padding:3px 0;text-align:right;font-weight:600;color:<?php echo $summary['validation']['error_count'] > 0 ? '#d63638' : '#00a32a'; ?>;"><?php echo esc_html( $summary['validation']['error_count'] ); ?></td>
+						</tr>
+						<tr>
+							<td style="padding:3px 0;"><?php esc_html_e( 'Warnings', 'konx-affiliate-dashboard' ); ?></td>
+							<td style="padding:3px 0;text-align:right;font-weight:600;color:<?php echo $summary['validation']['warning_count'] > 0 ? '#dba617' : '#00a32a'; ?>;"><?php echo esc_html( $summary['validation']['warning_count'] ); ?></td>
+						</tr>
+					</table>
+					<?php if ( ! empty( $summary['validation']['top_categories'] ) ) : ?>
+						<p style="margin:8px 0 0;font-size:12px;color:#646970;">
+							<?php esc_html_e( 'Top issues:', 'konx-affiliate-dashboard' ); ?>
+							<?php echo esc_html( implode( ', ', array_map( function ( $f, $c ) { return "$f ($c)"; }, array_keys( $summary['validation']['top_categories'] ), $summary['validation']['top_categories'] ) ) ); ?>
+						</p>
+					<?php endif; ?>
+				<?php else : ?>
+					<p class="description"><?php esc_html_e( 'Validation not yet run.', 'konx-affiliate-dashboard' ); ?></p>
+				<?php endif; ?>
+			</div>
+
+		</div>
+
+		<!-- Dry Run Projection -->
+		<?php if ( $summary['has_dryrun'] ) : ?>
+			<h3><?php esc_html_e( 'Dry Run Projection', 'konx-affiliate-dashboard' ); ?></h3>
+			<div class="konx-stats-grid" style="margin:0 0 16px;">
+				<?php self::stat_card( $summary['projection']['to_create'], __( 'To Create', 'konx-affiliate-dashboard' ), '#00a32a' ); ?>
+				<?php self::stat_card( $summary['projection']['to_skip'], __( 'To Skip', 'konx-affiliate-dashboard' ), $summary['projection']['to_skip'] > 0 ? '#d63638' : '#00a32a' ); ?>
+				<?php self::stat_card( $summary['projection']['wp_users'], __( 'New WP Users', 'konx-affiliate-dashboard' ), '#2271b1' ); ?>
+				<?php self::stat_card( $summary['projection']['sponsor_links'], __( 'Sponsor Links', 'konx-affiliate-dashboard' ), '#2271b1' ); ?>
+			</div>
+		<?php endif; ?>
+
+		<!-- Export -->
+		<div style="margin:16px 0;">
+			<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=konx_migration_export_summary' ), 'konx_export_summary', 'konx_sum_nonce' ) ); ?>" class="button">
+				<?php esc_html_e( 'Download Summary Report (CSV)', 'konx-affiliate-dashboard' ); ?>
+			</a>
+		</div>
+
+		<div class="notice notice-info inline" style="margin:0 0 16px;">
+			<p><?php esc_html_e( 'This is a preview only. No data has been written. Continue to the Import Preview for record-level details.', 'konx-affiliate-dashboard' ); ?></p>
+		</div>
+
+		<?php self::render_nav( 'source-comparison', 'preview' ); ?>
 		<?php
 	}
 
@@ -1114,7 +1281,7 @@ class Konx_Migration_Wizard {
 			</div>
 		<?php endif; ?>
 
-		<?php self::render_nav( 'source-comparison', 'dry-run' ); ?>
+		<?php self::render_nav( 'summary', 'dry-run' ); ?>
 		<?php
 	}
 
@@ -1482,6 +1649,33 @@ class Konx_Migration_Wizard {
 		$csv = Konx_Source_Comparator::export_csv( $state['comparison'] );
 		$filename = 'konx-comparison-report-' . gmdate( 'Y-m-d-His' ) . '.csv';
 
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename=' . $filename );
+		header( 'Pragma: no-cache' );
+		header( 'Expires: 0' );
+
+		$output = fopen( 'php://output', 'w' );
+		foreach ( $csv as $row ) {
+			fputcsv( $output, $row );
+		}
+		fclose( $output );
+		exit;
+	}
+
+	/**
+	 * Handle summary report CSV export.
+	 */
+	public static function handle_export_summary() {
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
+		}
+		check_admin_referer( 'konx_export_summary', 'konx_sum_nonce' );
+
+		$state   = get_option( 'konx_migration_state', array() );
+		$summary = Konx_Migration_Summary::build( $state );
+		$csv     = Konx_Migration_Summary::export_csv( $summary );
+
+		$filename = 'konx-migration-summary-' . gmdate( 'Y-m-d-His' ) . '.csv';
 		header( 'Content-Type: text/csv; charset=utf-8' );
 		header( 'Content-Disposition: attachment; filename=' . $filename );
 		header( 'Pragma: no-cache' );
