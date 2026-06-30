@@ -593,7 +593,7 @@ class Konx_Admin_Dashboard {
 				'icon'  => 'dashicons-editor-help',
 				'title' => __( 'Help Center', 'konx-affiliate-dashboard' ),
 				'desc'  => __( 'Documentation and getting started guides', 'konx-affiliate-dashboard' ),
-				'url'   => admin_url( 'admin.php?page=konx-help-center' ),
+				'url'   => admin_url( 'admin.php?page=konx-help' ),
 			),
 		);
 		?>
