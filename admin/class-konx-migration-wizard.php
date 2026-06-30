@@ -40,6 +40,7 @@ class Konx_Migration_Wizard {
 		'preview'           => 'Preview',
 		'dry-run'           => 'Dry Run',
 		'approval'          => 'Approval',
+		'audit'             => 'Audit Report',
 	);
 
 	/**
@@ -55,6 +56,8 @@ class Konx_Migration_Wizard {
 		add_action( 'admin_post_konx_migration_export_summary', array( __CLASS__, 'handle_export_summary' ) );
 		add_action( 'admin_post_konx_migration_dry_run', array( __CLASS__, 'handle_dry_run' ) );
 		add_action( 'admin_post_konx_migration_approve', array( __CLASS__, 'handle_approve' ) );
+		add_action( 'admin_post_konx_migration_export_audit_csv', array( __CLASS__, 'handle_export_audit_csv' ) );
+		add_action( 'admin_post_konx_migration_export_audit_json', array( __CLASS__, 'handle_export_audit_json' ) );
 	}
 
 	/**
@@ -143,6 +146,9 @@ class Konx_Migration_Wizard {
 						break;
 					case 'approval':
 						self::render_approval( $state );
+						break;
+					case 'audit':
+						self::render_audit( $state );
 						break;
 					default:
 						self::render_welcome( $state );
@@ -1444,7 +1450,314 @@ class Konx_Migration_Wizard {
 			</div>
 		<?php endif; ?>
 
-		<?php self::render_nav( 'dry-run', null ); ?>
+		<?php self::render_nav( 'dry-run', 'audit' ); ?>
+		<?php
+	}
+
+	// ------------------------------------------------------------------
+	// Step 14: Audit Report
+	// ------------------------------------------------------------------
+
+	/**
+	 * Render the Audit Report step.
+	 *
+	 * Displays a comprehensive read-only audit of all migration preview
+	 * data. No data is written — this is purely a review/reporting tool.
+	 *
+	 * @param array $state Migration state.
+	 */
+	private static function render_audit( $state ) {
+		if ( ! isset( $state['scan'] ) ) {
+			self::render_no_scan();
+			return;
+		}
+
+		$audit = Konx_Migration_Audit::build();
+		if ( ! $audit ) {
+			self::render_no_scan();
+			return;
+		}
+
+		$s  = $audit['summary'];
+		$rc = array( 'ready' => '#00a32a', 'needs_attention' => '#dba617', 'blocked' => '#d63638' );
+		$ri = array( 'ready' => '&#10003;', 'needs_attention' => '&#9888;', 'blocked' => '&#10007;' );
+		$rs = $audit['readiness']['status'];
+
+		?>
+		<h2><?php esc_html_e( 'Migration Audit Report', 'konx-affiliate-dashboard' ); ?></h2>
+		<p class="description"><?php esc_html_e( 'Comprehensive read-only audit of all migration preview data. No data has been imported.', 'konx-affiliate-dashboard' ); ?></p>
+
+		<!-- Preview-Only Warning -->
+		<div class="notice notice-warning inline" style="margin:16px 0;border-left:4px solid #dba617;">
+			<p><strong><?php esc_html_e( 'Preview Only', 'konx-affiliate-dashboard' ); ?></strong> &mdash;
+			<?php esc_html_e( 'This report reflects preview data only. No WordPress users, affiliate records, or production data have been created. Migration execution is not yet available.', 'konx-affiliate-dashboard' ); ?></p>
+		</div>
+
+		<!-- Readiness Score -->
+		<div style="background:#fff;border:1px solid #c3c4c7;border-left:4px solid <?php echo esc_attr( isset( $rc[ $rs ] ) ? $rc[ $rs ] : '#646970' ); ?>;border-radius:4px;padding:20px;margin:0 0 20px;display:flex;align-items:center;gap:16px;">
+			<span style="font-size:36px;color:<?php echo esc_attr( isset( $rc[ $rs ] ) ? $rc[ $rs ] : '#646970' ); ?>;"><?php echo isset( $ri[ $rs ] ) ? $ri[ $rs ] : '&#8226;'; // Safe entity. ?></span>
+			<div>
+				<strong style="font-size:18px;color:<?php echo esc_attr( isset( $rc[ $rs ] ) ? $rc[ $rs ] : '#646970' ); ?>;"><?php echo esc_html( $audit['readiness']['label'] ); ?></strong>
+				<?php if ( ! empty( $audit['readiness']['reasons'] ) ) : ?>
+					<ul style="margin:4px 0 0 16px;font-size:13px;color:#646970;">
+						<?php foreach ( $audit['readiness']['reasons'] as $reason ) : ?>
+							<li><?php echo esc_html( $reason ); ?></li>
+						<?php endforeach; ?>
+					</ul>
+				<?php endif; ?>
+			</div>
+			<?php if ( $audit['approved'] ) : ?>
+				<div style="margin-left:auto;text-align:right;">
+					<?php echo wp_kses_post( self::badge( 'ok', __( 'Approved', 'konx-affiliate-dashboard' ) ) ); ?>
+					<div style="font-size:11px;color:#646970;margin-top:4px;">
+						<?php printf( esc_html__( 'User #%d, %s', 'konx-affiliate-dashboard' ), $audit['approved_by'], esc_html( date_i18n( 'M j, Y', strtotime( $audit['approved_at'] ) ) ) ); ?>
+					</div>
+				</div>
+			<?php endif; ?>
+		</div>
+
+		<!-- Summary Cards -->
+		<div class="konx-stats-grid" style="margin:0 0 20px;">
+			<?php self::stat_card( $s['records']['total'], __( 'Total Records', 'konx-affiliate-dashboard' ), '#2271b1' ); ?>
+			<?php self::stat_card( $s['records']['valid'], __( 'Valid', 'konx-affiliate-dashboard' ), '#00a32a' ); ?>
+			<?php self::stat_card( $s['records']['warnings'], __( 'Warnings', 'konx-affiliate-dashboard' ), $s['records']['warnings'] > 0 ? '#dba617' : '#00a32a' ); ?>
+			<?php self::stat_card( $s['records']['errors'], __( 'Errors', 'konx-affiliate-dashboard' ), $s['records']['errors'] > 0 ? '#d63638' : '#00a32a' ); ?>
+			<?php self::stat_card( $audit['sponsors']['missing'], __( 'Orphan Sponsors', 'konx-affiliate-dashboard' ), $audit['sponsors']['missing'] > 0 ? '#dba617' : '#00a32a' ); ?>
+			<?php if ( $audit['duplicates'] ) : ?>
+				<?php self::stat_card( $audit['duplicates']['total_duplicates'], __( 'Duplicates', 'konx-affiliate-dashboard' ), $audit['duplicates']['total_duplicates'] > 0 ? '#d63638' : '#00a32a' ); ?>
+			<?php endif; ?>
+		</div>
+
+		<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin-bottom:20px;">
+
+			<!-- Source Info -->
+			<div class="konx-card">
+				<h2 style="display:flex;align-items:center;gap:8px;">
+					<span class="dashicons dashicons-media-spreadsheet" style="color:#2271b1;"></span>
+					<?php esc_html_e( 'Data Source', 'konx-affiliate-dashboard' ); ?>
+				</h2>
+				<table style="width:100%;font-size:13px;">
+					<tr><td style="padding:4px 0;font-weight:500;"><?php esc_html_e( 'Source', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;"><?php echo esc_html( strtoupper( $audit['source'] ) ); ?></td></tr>
+					<tr><td style="padding:4px 0;font-weight:500;"><?php esc_html_e( 'Scan Date', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;"><?php echo $audit['scan_at'] ? esc_html( date_i18n( 'M j, Y g:ia', strtotime( $audit['scan_at'] ) ) ) : '—'; ?></td></tr>
+					<?php if ( $audit['csv_info'] ) : ?>
+						<tr><td style="padding:4px 0;font-weight:500;"><?php esc_html_e( 'File', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;"><code style="font-size:12px;"><?php echo esc_html( $audit['csv_info']['file_name'] ?? '—' ); ?></code></td></tr>
+						<tr><td style="padding:4px 0;font-weight:500;"><?php esc_html_e( 'Rows', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;"><?php echo esc_html( number_format( $audit['csv_info']['row_count'] ?? 0 ) ); ?></td></tr>
+					<?php endif; ?>
+				</table>
+			</div>
+
+			<!-- Affiliate Types -->
+			<div class="konx-card">
+				<h2 style="display:flex;align-items:center;gap:8px;">
+					<span class="dashicons dashicons-groups" style="color:#2271b1;"></span>
+					<?php esc_html_e( 'Affiliate Types', 'konx-affiliate-dashboard' ); ?>
+				</h2>
+				<?php if ( ! empty( $s['types'] ) ) : ?>
+					<table style="width:100%;font-size:13px;">
+						<?php foreach ( $s['types'] as $type => $count ) : ?>
+							<tr>
+								<td style="padding:4px 0;"><?php echo esc_html( ucwords( str_replace( '_', ' ', $type ) ) ); ?></td>
+								<td style="padding:4px 0;text-align:right;font-weight:600;"><?php echo esc_html( number_format( $count ) ); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					</table>
+				<?php else : ?>
+					<p class="description"><?php esc_html_e( 'Run a dry run to see type breakdown.', 'konx-affiliate-dashboard' ); ?></p>
+				<?php endif; ?>
+			</div>
+
+			<!-- Sponsor Hierarchy -->
+			<div class="konx-card">
+				<h2 style="display:flex;align-items:center;gap:8px;">
+					<span class="dashicons dashicons-networking" style="color:#2271b1;"></span>
+					<?php esc_html_e( 'Sponsor Hierarchy', 'konx-affiliate-dashboard' ); ?>
+				</h2>
+				<table style="width:100%;font-size:13px;">
+					<tr><td style="padding:4px 0;"><?php esc_html_e( 'Total References', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;"><?php echo esc_html( number_format( $audit['sponsors']['total'] ) ); ?></td></tr>
+					<tr><td style="padding:4px 0;"><?php esc_html_e( 'Resolved', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;color:#00a32a;"><?php echo esc_html( number_format( $audit['sponsors']['resolved'] ) ); ?></td></tr>
+					<tr><td style="padding:4px 0;"><?php esc_html_e( 'Missing', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;color:<?php echo $audit['sponsors']['missing'] > 0 ? '#dba617' : '#00a32a'; ?>;"><?php echo esc_html( number_format( $audit['sponsors']['missing'] ) ); ?></td></tr>
+					<tr><td style="padding:4px 0;"><?php esc_html_e( 'Self-Referrals', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;"><?php echo esc_html( number_format( $audit['sponsors']['self_referrals'] ) ); ?></td></tr>
+				</table>
+				<?php if ( ! empty( $audit['sponsors']['still_missing'] ) ) : ?>
+					<details style="margin-top:8px;">
+						<summary style="cursor:pointer;font-size:12px;color:#2271b1;font-weight:600;"><?php printf( esc_html__( 'View %d unresolved sponsors', 'konx-affiliate-dashboard' ), count( $audit['sponsors']['still_missing'] ) ); ?></summary>
+						<table class="widefat fixed striped" style="font-size:12px;margin-top:8px;">
+							<thead><tr><th><?php esc_html_e( 'Sponsor', 'konx-affiliate-dashboard' ); ?></th><th style="width:60px;"><?php esc_html_e( 'Refs', 'konx-affiliate-dashboard' ); ?></th></tr></thead>
+							<tbody>
+								<?php foreach ( array_slice( $audit['sponsors']['still_missing'], 0, 20 ) as $m ) : ?>
+									<tr><td><code><?php echo esc_html( $m['sponsor'] ); ?></code></td><td><?php echo esc_html( $m['count'] ); ?></td></tr>
+								<?php endforeach; ?>
+								<?php if ( count( $audit['sponsors']['still_missing'] ) > 20 ) : ?>
+									<tr><td colspan="2" style="color:#646970;"><?php printf( esc_html__( '... and %d more', 'konx-affiliate-dashboard' ), count( $audit['sponsors']['still_missing'] ) - 20 ); ?></td></tr>
+								<?php endif; ?>
+							</tbody>
+						</table>
+					</details>
+				<?php endif; ?>
+			</div>
+
+			<!-- Duplicates / Conflicts -->
+			<?php if ( $audit['duplicates'] ) : ?>
+				<div class="konx-card">
+					<h2 style="display:flex;align-items:center;gap:8px;">
+						<span class="dashicons dashicons-warning" style="color:<?php echo $audit['duplicates']['total_duplicates'] > 0 ? '#d63638' : '#00a32a'; ?>;"></span>
+						<?php esc_html_e( 'Duplicates & Conflicts', 'konx-affiliate-dashboard' ); ?>
+					</h2>
+					<table style="width:100%;font-size:13px;">
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Duplicate Emails', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;color:<?php echo $audit['duplicates']['email_duplicate_count'] > 0 ? '#d63638' : '#00a32a'; ?>;"><?php echo esc_html( $audit['duplicates']['email_duplicate_count'] ); ?></td></tr>
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Duplicate Team Names', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;color:<?php echo $audit['duplicates']['code_duplicate_count'] > 0 ? '#d63638' : '#00a32a'; ?>;"><?php echo esc_html( $audit['duplicates']['code_duplicate_count'] ); ?></td></tr>
+					</table>
+					<?php if ( ! empty( $audit['duplicates']['email_duplicates'] ) ) : ?>
+						<details style="margin-top:8px;">
+							<summary style="cursor:pointer;font-size:12px;color:#2271b1;font-weight:600;"><?php printf( esc_html__( 'View %d duplicate emails', 'konx-affiliate-dashboard' ), $audit['duplicates']['email_duplicate_count'] ); ?></summary>
+							<table class="widefat fixed striped" style="font-size:12px;margin-top:8px;">
+								<thead><tr><th><?php esc_html_e( 'Row', 'konx-affiliate-dashboard' ); ?></th><th><?php esc_html_e( 'Email', 'konx-affiliate-dashboard' ); ?></th></tr></thead>
+								<tbody>
+									<?php foreach ( array_slice( $audit['duplicates']['email_duplicates'], 0, 20 ) as $d ) : ?>
+										<tr><td><?php echo esc_html( $d['row'] ); ?></td><td><code><?php echo esc_html( $d['value'] ); ?></code></td></tr>
+									<?php endforeach; ?>
+								</tbody>
+							</table>
+						</details>
+					<?php endif; ?>
+				</div>
+			<?php endif; ?>
+
+			<!-- Validation Summary -->
+			<?php if ( $audit['validation'] ) : ?>
+				<div class="konx-card">
+					<h2 style="display:flex;align-items:center;gap:8px;">
+						<span class="dashicons dashicons-yes-alt" style="color:#2271b1;"></span>
+						<?php esc_html_e( 'Validation Breakdown', 'konx-affiliate-dashboard' ); ?>
+					</h2>
+					<table style="width:100%;font-size:13px;">
+						<?php foreach ( $audit['validation']['by_field'] as $field => $counts ) : ?>
+							<tr>
+								<td style="padding:4px 0;"><code><?php echo esc_html( $field ); ?></code></td>
+								<td style="padding:4px 0;text-align:right;">
+									<?php if ( $counts['error'] > 0 ) : ?>
+										<span style="color:#d63638;font-weight:600;"><?php echo esc_html( $counts['error'] ); ?> <?php esc_html_e( 'errors', 'konx-affiliate-dashboard' ); ?></span>
+									<?php endif; ?>
+									<?php if ( $counts['warning'] > 0 ) : ?>
+										<span style="color:#dba617;font-weight:600;<?php echo $counts['error'] > 0 ? 'margin-left:8px;' : ''; ?>"><?php echo esc_html( $counts['warning'] ); ?> <?php esc_html_e( 'warnings', 'konx-affiliate-dashboard' ); ?></span>
+									<?php endif; ?>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</table>
+					<?php if ( ! empty( $audit['validation']['top_issues'] ) ) : ?>
+						<h3 style="font-size:13px;margin:12px 0 8px;"><?php esc_html_e( 'Top Issues', 'konx-affiliate-dashboard' ); ?></h3>
+						<?php foreach ( array_slice( $audit['validation']['top_issues'], 0, 5 ) as $ti ) : ?>
+							<div style="display:flex;align-items:baseline;gap:6px;font-size:12px;line-height:2;">
+								<span style="color:<?php echo 'error' === $ti['severity'] ? '#d63638' : '#dba617'; ?>;flex-shrink:0;"><?php echo 'error' === $ti['severity'] ? '&#10007;' : '&#9888;'; ?></span>
+								<span><?php echo esc_html( $ti['message'] ); ?></span>
+								<span style="margin-left:auto;font-weight:600;">&times;<?php echo esc_html( $ti['count'] ); ?></span>
+							</div>
+						<?php endforeach; ?>
+					<?php endif; ?>
+				</div>
+			<?php endif; ?>
+
+			<!-- Field Mapping -->
+			<?php if ( $audit['field_map'] ) : ?>
+				<div class="konx-card">
+					<h2 style="display:flex;align-items:center;gap:8px;">
+						<span class="dashicons dashicons-editor-table" style="color:#2271b1;"></span>
+						<?php esc_html_e( 'Field Mapping', 'konx-affiliate-dashboard' ); ?>
+					</h2>
+					<div class="konx-stats-grid" style="margin:0 0 12px;">
+						<?php self::stat_card( $audit['field_map']['mapped'], __( 'Mapped', 'konx-affiliate-dashboard' ), '#00a32a' ); ?>
+						<?php self::stat_card( $audit['field_map']['unmapped'], __( 'Unmapped', 'konx-affiliate-dashboard' ), $audit['field_map']['unmapped'] > 0 ? '#dba617' : '#00a32a' ); ?>
+						<?php self::stat_card( $audit['field_map']['exact'], __( 'Exact', 'konx-affiliate-dashboard' ), '#2271b1' ); ?>
+					</div>
+					<details>
+						<summary style="cursor:pointer;font-size:12px;color:#2271b1;font-weight:600;"><?php esc_html_e( 'View all column mappings', 'konx-affiliate-dashboard' ); ?></summary>
+						<table class="widefat fixed striped" style="font-size:12px;margin-top:8px;">
+							<thead><tr><th><?php esc_html_e( 'CSV Column', 'konx-affiliate-dashboard' ); ?></th><th><?php esc_html_e( 'KonX Field', 'konx-affiliate-dashboard' ); ?></th><th style="width:80px;"><?php esc_html_e( 'Match', 'konx-affiliate-dashboard' ); ?></th></tr></thead>
+							<tbody>
+								<?php foreach ( $audit['field_map']['details'] as $fm ) : ?>
+									<tr<?php echo 'unmapped' === $fm['status'] ? ' style="opacity:0.5;"' : ''; ?>>
+										<td><code><?php echo esc_html( $fm['csv_column'] ); ?></code></td>
+										<td><?php echo esc_html( $fm['target'] ); ?></td>
+										<td><?php echo wp_kses_post( self::badge( 'mapped' === $fm['status'] ? 'ok' : 'warning', ucfirst( $fm['confidence'] ) ) ); ?></td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					</details>
+				</div>
+			<?php endif; ?>
+
+			<!-- Comparison Summary -->
+			<?php if ( $audit['comparison'] ) : ?>
+				<div class="konx-card">
+					<h2 style="display:flex;align-items:center;gap:8px;">
+						<span class="dashicons dashicons-randomize" style="color:#2271b1;"></span>
+						<?php esc_html_e( 'Cross-Source Comparison', 'konx-affiliate-dashboard' ); ?>
+					</h2>
+					<table style="width:100%;font-size:13px;">
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'WordPress Matches', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;"><?php echo esc_html( $audit['comparison']['wp']['matched'] ); ?></td></tr>
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'New WP Users Needed', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;"><?php echo esc_html( $audit['comparison']['wp']['new'] ); ?></td></tr>
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'KonX Matches', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;color:<?php echo $audit['comparison']['konx']['matched'] > 0 ? '#dba617' : '#00a32a'; ?>;"><?php echo esc_html( $audit['comparison']['konx']['matched'] ); ?></td></tr>
+						<?php if ( $audit['comparison']['ca']['detected'] ) : ?>
+							<tr><td style="padding:4px 0;"><?php esc_html_e( 'Coupon Affiliate Matches', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;"><?php echo esc_html( $audit['comparison']['ca']['matched'] ); ?></td></tr>
+						<?php endif; ?>
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Total Issues Found', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;"><?php echo esc_html( $audit['comparison']['issue_count'] ); ?></td></tr>
+					</table>
+				</div>
+			<?php endif; ?>
+
+			<!-- Projection -->
+			<?php if ( $s['has_dryrun'] ) : ?>
+				<div class="konx-card">
+					<h2 style="display:flex;align-items:center;gap:8px;">
+						<span class="dashicons dashicons-chart-bar" style="color:#2271b1;"></span>
+						<?php esc_html_e( 'Dry Run Projection', 'konx-affiliate-dashboard' ); ?>
+					</h2>
+					<table style="width:100%;font-size:13px;">
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Affiliates to Create', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;color:#00a32a;"><?php echo esc_html( number_format( $s['projection']['to_create'] ) ); ?></td></tr>
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Records to Skip', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;color:<?php echo $s['projection']['to_skip'] > 0 ? '#d63638' : '#00a32a'; ?>;"><?php echo esc_html( number_format( $s['projection']['to_skip'] ) ); ?></td></tr>
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'WP Users to Create', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;"><?php echo esc_html( number_format( $s['projection']['wp_users'] ) ); ?></td></tr>
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Sponsor Links', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;"><?php echo esc_html( number_format( $s['projection']['sponsor_links'] ) ); ?></td></tr>
+					</table>
+				</div>
+			<?php endif; ?>
+
+		</div>
+
+		<!-- Export Options -->
+		<div class="konx-card" style="margin-bottom:16px;">
+			<h2 style="display:flex;align-items:center;gap:8px;">
+				<span class="dashicons dashicons-download" style="color:#2271b1;"></span>
+				<?php esc_html_e( 'Export Audit Report', 'konx-affiliate-dashboard' ); ?>
+			</h2>
+			<div style="display:flex;gap:8px;flex-wrap:wrap;">
+				<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=konx_migration_export_audit_csv' ), 'konx_export_audit', 'konx_audit_nonce' ) ); ?>" class="button">
+					<span class="dashicons dashicons-media-spreadsheet" style="vertical-align:text-bottom;"></span>
+					<?php esc_html_e( 'Download CSV', 'konx-affiliate-dashboard' ); ?>
+				</a>
+				<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=konx_migration_export_audit_json' ), 'konx_export_audit', 'konx_audit_nonce' ) ); ?>" class="button">
+					<span class="dashicons dashicons-editor-code" style="vertical-align:text-bottom;"></span>
+					<?php esc_html_e( 'Download JSON', 'konx-affiliate-dashboard' ); ?>
+				</a>
+				<button type="button" class="button" onclick="window.print();">
+					<span class="dashicons dashicons-printer" style="vertical-align:text-bottom;"></span>
+					<?php esc_html_e( 'Print Report', 'konx-affiliate-dashboard' ); ?>
+				</button>
+			</div>
+		</div>
+
+		<!-- Warnings Footer -->
+		<div style="background:#fcf6e3;border:1px solid #dba617;border-radius:4px;padding:12px 16px;margin-bottom:16px;">
+			<strong style="color:#946800;"><?php esc_html_e( 'Important Notices', 'konx-affiliate-dashboard' ); ?></strong>
+			<ul style="margin:8px 0 0 16px;font-size:13px;color:#946800;">
+				<?php foreach ( $audit['warnings'] as $warning ) : ?>
+					<li><?php echo esc_html( $warning ); ?></li>
+				<?php endforeach; ?>
+			</ul>
+		</div>
+
+		<?php self::render_nav( 'approval', null ); ?>
 		<?php
 	}
 
@@ -1687,6 +2000,62 @@ class Konx_Migration_Wizard {
 			fputcsv( $output, $row );
 		}
 		fclose( $output );
+		exit;
+	}
+
+	/**
+	 * Handle audit report CSV export.
+	 */
+	public static function handle_export_audit_csv() {
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
+		}
+		check_admin_referer( 'konx_export_audit', 'konx_audit_nonce' );
+
+		$audit = Konx_Migration_Audit::build();
+		if ( ! $audit ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=konx-migration&step=audit' ) );
+			exit;
+		}
+
+		$csv      = Konx_Migration_Audit::export_csv( $audit );
+		$filename = 'konx-migration-audit-' . gmdate( 'Y-m-d-His' ) . '.csv';
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename=' . $filename );
+		header( 'Pragma: no-cache' );
+		header( 'Expires: 0' );
+
+		$output = fopen( 'php://output', 'w' );
+		foreach ( $csv as $row ) {
+			fputcsv( $output, $row );
+		}
+		fclose( $output );
+		exit;
+	}
+
+	/**
+	 * Handle audit report JSON export.
+	 */
+	public static function handle_export_audit_json() {
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
+		}
+		check_admin_referer( 'konx_export_audit', 'konx_audit_nonce' );
+
+		$audit = Konx_Migration_Audit::build();
+		if ( ! $audit ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=konx-migration&step=audit' ) );
+			exit;
+		}
+
+		$json     = Konx_Migration_Audit::export_json( $audit );
+		$filename = 'konx-migration-audit-' . gmdate( 'Y-m-d-His' ) . '.json';
+		header( 'Content-Type: application/json; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename=' . $filename );
+		header( 'Pragma: no-cache' );
+		header( 'Expires: 0' );
+
+		echo wp_json_encode( $json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
 		exit;
 	}
 
