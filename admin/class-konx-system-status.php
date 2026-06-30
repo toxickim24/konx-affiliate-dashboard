@@ -12,14 +12,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Konx_System_Status {
 
 	public static function init() {
-		// Menu registered by Konx_Tools_Page.
+		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
 	}
 
 	public static function register_menu() {
+		// Hidden from sidebar — accessed via Settings > System Status tab.
+		// Page slug kept registered for backward-compatible redirects.
 		add_submenu_page(
-			'konx-affiliate-dashboard',
+			null,
 			__( 'System Status', 'konx-affiliate-dashboard' ),
-			__( 'System Status', 'konx-affiliate-dashboard' ),
+			'',
 			'manage_konx_settings',
 			'konx-system-status',
 			array( __CLASS__, 'render_page' )
@@ -30,9 +32,9 @@ class Konx_System_Status {
 		if ( ! current_user_can( 'manage_konx_settings' ) ) {
 			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
 		}
-		echo '<div class="wrap"><h1>' . esc_html__( 'System Status', 'konx-affiliate-dashboard' ) . '</h1>';
-		self::render_content();
-		echo '</div>';
+		// Redirect to Settings > System Status tab.
+		wp_safe_redirect( admin_url( 'admin.php?page=konx-settings&tab=system-status' ) );
+		exit;
 	}
 
 	/** Render inner content (used by Tools page). */

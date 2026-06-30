@@ -61,10 +61,11 @@ class Konx_Migration_Wizard {
 	 * Register the submenu page.
 	 */
 	public static function register_menu() {
+		// Hidden from sidebar — accessed via Settings > Migration tab.
 		add_submenu_page(
-			'konx-affiliate-dashboard',
+			null,
 			__( 'Migration Wizard', 'konx-affiliate-dashboard' ),
-			__( 'Migration', 'konx-affiliate-dashboard' ),
+			'',
 			'manage_konx_settings',
 			'konx-migration',
 			array( __CLASS__, 'render_page' )

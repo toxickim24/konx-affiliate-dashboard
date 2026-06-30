@@ -194,7 +194,7 @@ class Konx_Notification_Center {
 				'color'       => '#dba617',
 				'title'       => __( 'No Products Mapped', 'konx-affiliate-dashboard' ),
 				'description' => __( 'Map WooCommerce products to commission categories so affiliates can earn commissions.', 'konx-affiliate-dashboard' ),
-				'url'         => admin_url( 'admin.php?page=konx-product-mapping' ),
+				'url'         => admin_url( 'admin.php?page=konx-settings&tab=product-mapping' ),
 			);
 		}
 

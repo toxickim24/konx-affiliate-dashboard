@@ -33,10 +33,12 @@ class Konx_Admin_Product_Mapping {
 	 * The top-level menu is registered by Konx_Admin_Dashboard.
 	 */
 	public static function register_menu() {
+		// Hidden from sidebar — accessed via Settings > Product Mapping tab.
+		// Page slug kept registered for backward-compatible redirects.
 		add_submenu_page(
-			'konx-affiliate-dashboard',
+			null,
 			__( 'Product Mapping', 'konx-affiliate-dashboard' ),
-			__( 'Product Mapping', 'konx-affiliate-dashboard' ),
+			'',
 			'manage_konx_settings',
 			'konx-product-mapping',
 			array( __CLASS__, 'render_page' )
@@ -44,31 +46,37 @@ class Konx_Admin_Product_Mapping {
 	}
 
 	/**
-	 * Render the product mapping admin page.
+	 * Render the product mapping admin page (standalone).
 	 */
 	public static function render_page() {
 		if ( ! current_user_can( 'manage_konx_settings' ) ) {
 			wp_die( esc_html__( 'You do not have permission to access this page.', 'konx-affiliate-dashboard' ) );
 		}
+		// Redirect to Settings > Product Mapping tab.
+		wp_safe_redirect( admin_url( 'admin.php?page=konx-settings&tab=product-mapping' ) );
+		exit;
+	}
 
+	/**
+	 * Render product mapping content (embeddable in Settings tab).
+	 */
+	public static function render_content() {
 		$mappings   = Konx_Product_Mapper::get_all_mappings();
 		$categories = Konx_Product_Mapper::get_categories();
 		$feedback   = self::get_feedback();
 
+		wp_enqueue_script( 'wc-enhanced-select' );
+		wp_enqueue_style( 'woocommerce_admin_styles' );
+
 		?>
-		<?php wp_enqueue_script( 'wc-enhanced-select' ); wp_enqueue_style( 'woocommerce_admin_styles' ); ?>
+		<h2><?php esc_html_e( 'Product Mapping', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'product_mapping' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></h2>
+		<p><?php esc_html_e( 'Map WooCommerce products to commission categories. Search products by name or enter an ID directly.', 'konx-affiliate-dashboard' ); ?></p>
 
-		<div class="wrap">
-			<div class="konx-page-header">
-				<h1><?php esc_html_e( 'Product Mapping', 'konx-affiliate-dashboard' ); ?> <?php echo Konx_Tooltip_Helper::get( 'product_mapping' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></h1>
+		<?php if ( $feedback ) : ?>
+			<div class="notice notice-<?php echo esc_attr( $feedback['type'] ); ?> is-dismissible">
+				<p><?php echo esc_html( $feedback['message'] ); ?></p>
 			</div>
-			<p><?php esc_html_e( 'Map WooCommerce products to commission categories. Search products by name or enter an ID directly.', 'konx-affiliate-dashboard' ); ?></p>
-
-			<?php if ( $feedback ) : ?>
-				<div class="notice notice-<?php echo esc_attr( $feedback['type'] ); ?> is-dismissible">
-					<p><?php echo esc_html( $feedback['message'] ); ?></p>
-				</div>
-			<?php endif; ?>
+		<?php endif; ?>
 
 			<div class="konx-form-card">
 				<h2><?php esc_html_e( 'Add New Mapping', 'konx-affiliate-dashboard' ); ?></h2>
@@ -195,7 +203,6 @@ class Konx_Admin_Product_Mapping {
 					</tbody>
 				</table>
 			<?php endif; ?>
-		</div>
 		<?php
 	}
 
@@ -265,7 +272,7 @@ class Konx_Admin_Product_Mapping {
 			'message' => $message,
 		), 30 );
 
-		wp_safe_redirect( admin_url( 'admin.php?page=konx-product-mapping' ) );
+		wp_safe_redirect( admin_url( 'admin.php?page=konx-settings&tab=product-mapping' ) );
 		exit;
 	}
 

@@ -413,83 +413,57 @@ class Konx_Admin_Dashboard {
 	// ------------------------------------------------------------------
 
 	private static function get_platform_health() {
-		global $wpdb;
-
+		$health = Konx_Health_Engine::get_all();
 		$checks = array();
 
-		// WooCommerce.
-		$wc_active = konx_affiliate_is_woocommerce_active();
-		$checks[] = array(
-			'label'  => __( 'WooCommerce', 'konx-affiliate-dashboard' ),
-			'status' => $wc_active ? 'ok' : 'error',
-			'detail' => $wc_active ? ( defined( 'WC_VERSION' ) ? 'v' . WC_VERSION : __( 'Active', 'konx-affiliate-dashboard' ) ) : __( 'Not Active', 'konx-affiliate-dashboard' ),
-		);
-
-		// Database Tables.
-		$required_tables = array(
-			'konx_affiliates', 'konx_referral_clicks', 'konx_referral_conversions',
-			'konx_commissions', 'konx_wallet_ledger', 'konx_withdrawals',
-			'konx_admin_fees', 'konx_milestones', 'konx_commission_rules',
-			'konx_product_map', 'konx_audit_log',
-		);
-		$missing_tables = 0;
-		foreach ( $required_tables as $t ) {
-			$full = $wpdb->prefix . $t;
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $full ) ) !== $full ) {
-				$missing_tables++;
+		// WooCommerce — from system health items.
+		foreach ( $health['system']['items'] as $item ) {
+			if ( __( 'WooCommerce', 'konx-affiliate-dashboard' ) === $item['label'] ) {
+				$checks[] = array( 'label' => $item['label'], 'status' => $item['status'], 'detail' => $item['value'] );
+				break;
 			}
 		}
-		$checks[] = array(
-			'label'  => __( 'Database Tables', 'konx-affiliate-dashboard' ),
-			'status' => 0 === $missing_tables ? 'ok' : 'error',
-			'detail' => 0 === $missing_tables
-				? sprintf( __( '%d / %d present', 'konx-affiliate-dashboard' ), count( $required_tables ), count( $required_tables ) )
-				: sprintf( __( '%d missing', 'konx-affiliate-dashboard' ), $missing_tables ),
-		);
 
-		// Required Pages.
-		$dash_page = self::find_page_with_shortcode( 'konx_affiliate_dashboard' );
-		$reg_page  = self::find_page_with_shortcode( 'konx_affiliate_register' );
-		$pages_ok  = ( $dash_page && $reg_page );
-		$checks[] = array(
-			'label'  => __( 'Required Pages', 'konx-affiliate-dashboard' ),
-			'status' => $pages_ok ? 'ok' : 'warning',
-			'detail' => $pages_ok ? __( 'Dashboard & Registration found', 'konx-affiliate-dashboard' ) : __( 'Pages missing', 'konx-affiliate-dashboard' ),
-		);
+		// Database Tables — from system health items.
+		foreach ( $health['system']['items'] as $item ) {
+			if ( false !== strpos( $item['label'], 'Database' ) ) {
+				$checks[] = array( 'label' => __( 'Database Tables', 'konx-affiliate-dashboard' ), 'status' => $item['status'], 'detail' => $item['value'] );
+				break;
+			}
+		}
+
+		// Required Pages — from system health items.
+		foreach ( $health['system']['items'] as $item ) {
+			if ( false !== strpos( $item['label'], 'Pages' ) ) {
+				$checks[] = array( 'label' => $item['label'], 'status' => $item['status'], 'detail' => $item['value'] );
+				break;
+			}
+		}
 
 		// Product Mapping.
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-		$mapping_count = (int) $wpdb->get_var(
-			"SELECT COUNT(*) FROM {$wpdb->prefix}konx_product_map WHERE is_active = 1"
-		);
 		$checks[] = array(
 			'label'  => __( 'Product Mapping', 'konx-affiliate-dashboard' ),
-			'status' => $mapping_count > 0 ? 'ok' : 'warning',
-			'detail' => $mapping_count > 0
-				? sprintf( _n( '%d active', '%d active', $mapping_count, 'konx-affiliate-dashboard' ), $mapping_count )
+			'status' => $health['products']['status'],
+			'detail' => $health['products']['mapped'] > 0
+				? sprintf( _n( '%d active', '%d active', $health['products']['mapped'], 'konx-affiliate-dashboard' ), $health['products']['mapped'] )
 				: __( 'None configured', 'konx-affiliate-dashboard' ),
 		);
 
 		// Commission Rules.
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-		$rule_count = (int) $wpdb->get_var(
-			"SELECT COUNT(*) FROM {$wpdb->prefix}konx_commission_rules WHERE is_active = 1"
-		);
 		$checks[] = array(
 			'label'  => __( 'Commission Rules', 'konx-affiliate-dashboard' ),
-			'status' => $rule_count > 0 ? 'ok' : 'warning',
-			'detail' => $rule_count > 0
-				? sprintf( _n( '%d active rule', '%d active rules', $rule_count, 'konx-affiliate-dashboard' ), $rule_count )
+			'status' => $health['commission']['status'],
+			'detail' => $health['commission']['active_rules'] > 0
+				? sprintf( _n( '%d active rule', '%d active rules', $health['commission']['active_rules'], 'konx-affiliate-dashboard' ), $health['commission']['active_rules'] )
 				: __( 'None configured', 'konx-affiliate-dashboard' ),
 		);
 
 		// Migration.
-		$migration_status = get_option( 'konx_migration_status', '' );
-		if ( 'completed' === $migration_status ) {
+		$mig = $health['migration'];
+		if ( $mig['approved'] ) {
 			$mig_status = 'ok';
-			$mig_detail = __( 'Completed', 'konx-affiliate-dashboard' );
-		} elseif ( in_array( $migration_status, array( 'previewed', 'in_progress' ), true ) ) {
+			$mig_detail = __( 'Approved', 'konx-affiliate-dashboard' );
+		} elseif ( $mig['scanned'] ) {
 			$mig_status = 'warning';
 			$mig_detail = __( 'In Progress', 'konx-affiliate-dashboard' );
 		} else {
@@ -545,7 +519,7 @@ class Konx_Admin_Dashboard {
 			</div>
 
 			<div class="konx-health-footer">
-				<a href="<?php echo esc_url( admin_url( 'admin.php?page=konx-system-status' ) ); ?>" class="button button-small">
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=konx-settings&tab=system-status' ) ); ?>" class="button button-small">
 					<?php esc_html_e( 'Full System Status', 'konx-affiliate-dashboard' ); ?>
 				</a>
 			</div>
@@ -575,13 +549,13 @@ class Konx_Admin_Dashboard {
 				'icon'  => 'dashicons-products',
 				'title' => __( 'Product Mapping', 'konx-affiliate-dashboard' ),
 				'desc'  => __( 'Map WooCommerce products to commission types', 'konx-affiliate-dashboard' ),
-				'url'   => admin_url( 'admin.php?page=konx-product-mapping' ),
+				'url'   => admin_url( 'admin.php?page=konx-settings&tab=product-mapping' ),
 			),
 			array(
 				'icon'  => 'dashicons-admin-settings',
 				'title' => __( 'Commission Rules', 'konx-affiliate-dashboard' ),
 				'desc'  => __( 'Configure rates, tiers, and payout rules', 'konx-affiliate-dashboard' ),
-				'url'   => admin_url( 'admin.php?page=konx-settings' ),
+				'url'   => admin_url( 'admin.php?page=konx-settings&tab=general' ),
 			),
 			array(
 				'icon'  => 'dashicons-database-import',
@@ -649,7 +623,7 @@ class Konx_Admin_Dashboard {
 			'label'    => __( 'System Status', 'konx-affiliate-dashboard' ),
 			'status'   => $system_ok ? 'complete' : 'attention',
 			'detail'   => $system_detail,
-			'url'      => admin_url( 'admin.php?page=konx-system-status' ),
+			'url'      => admin_url( 'admin.php?page=konx-settings&tab=system-status' ),
 			'required' => true,
 		);
 
@@ -665,7 +639,7 @@ class Konx_Admin_Dashboard {
 			'detail'   => $mapping_count > 0
 				? sprintf( _n( '%d Product Mapped', '%d Products Mapped', $mapping_count, 'konx-affiliate-dashboard' ), $mapping_count )
 				: __( 'No products mapped', 'konx-affiliate-dashboard' ),
-			'url'      => admin_url( 'admin.php?page=konx-product-mapping' ),
+			'url'      => admin_url( 'admin.php?page=konx-settings&tab=product-mapping' ),
 			'required' => true,
 		);
 
@@ -681,7 +655,7 @@ class Konx_Admin_Dashboard {
 			'detail'   => $rule_count > 0
 				? sprintf( _n( '%d Active Rule', '%d Active Rules', $rule_count, 'konx-affiliate-dashboard' ), $rule_count )
 				: __( 'Needs Attention', 'konx-affiliate-dashboard' ),
-			'url'      => admin_url( 'admin.php?page=konx-settings' ),
+			'url'      => admin_url( 'admin.php?page=konx-settings&tab=general' ),
 			'required' => true,
 		);
 
@@ -703,7 +677,7 @@ class Konx_Admin_Dashboard {
 			'label'    => __( 'Required Pages', 'konx-affiliate-dashboard' ),
 			'status'   => $pages_ok ? 'complete' : 'attention',
 			'detail'   => $pages_detail,
-			'url'      => admin_url( 'admin.php?page=konx-system-status' ),
+			'url'      => admin_url( 'admin.php?page=konx-settings&tab=system-status' ),
 			'required' => true,
 		);
 
