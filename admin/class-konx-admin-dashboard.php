@@ -16,6 +16,8 @@ class Konx_Admin_Dashboard {
 
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ), 5 );
+		add_action( 'admin_menu', array( __CLASS__, 'add_menu_badges' ), 999 );
+		add_action( 'admin_bar_menu', array( __CLASS__, 'add_admin_bar_menu' ), 80 );
 	}
 
 	public static function register_menu() {
@@ -37,6 +39,151 @@ class Konx_Admin_Dashboard {
 			'konx-affiliate-dashboard',
 			array( __CLASS__, 'render_page' )
 		);
+	}
+
+	/**
+	 * Add notification badge counts to sidebar menu items.
+	 *
+	 * Uses short-lived transient (5 min) to avoid running counts on every page load.
+	 */
+	public static function add_menu_badges() {
+		global $submenu;
+
+		if ( ! current_user_can( 'manage_konx_settings' ) || ! isset( $submenu['konx-affiliate-dashboard'] ) ) {
+			return;
+		}
+
+		$counts = self::get_badge_counts();
+		$total  = $counts['pending_affiliates'] + $counts['pending_withdrawals'] + $counts['overdue_fees'];
+
+		// Top-level menu badge.
+		if ( $total > 0 ) {
+			global $menu;
+			foreach ( $menu as &$item ) {
+				if ( isset( $item[2] ) && 'konx-affiliate-dashboard' === $item[2] ) {
+					$item[0] .= sprintf( ' <span class="awaiting-mod">%d</span>', $total );
+					break;
+				}
+			}
+			unset( $item );
+		}
+
+		// Affiliates submenu badge.
+		if ( $counts['pending_affiliates'] > 0 ) {
+			foreach ( $submenu['konx-affiliate-dashboard'] as &$item ) {
+				if ( isset( $item[2] ) && 'konx-affiliates' === $item[2] ) {
+					$item[0] .= sprintf( ' <span class="awaiting-mod">%d</span>', $counts['pending_affiliates'] );
+					break;
+				}
+			}
+			unset( $item );
+		}
+
+		// Withdrawals submenu badge.
+		if ( $counts['pending_withdrawals'] > 0 ) {
+			foreach ( $submenu['konx-affiliate-dashboard'] as &$item ) {
+				if ( isset( $item[2] ) && 'konx-withdrawals' === $item[2] ) {
+					$item[0] .= sprintf( ' <span class="awaiting-mod">%d</span>', $counts['pending_withdrawals'] );
+					break;
+				}
+			}
+			unset( $item );
+		}
+	}
+
+	/**
+	 * Get badge counts with short-lived transient caching.
+	 *
+	 * @return array { pending_affiliates, pending_withdrawals, overdue_fees }
+	 */
+	private static function get_badge_counts() {
+		$cached = get_transient( 'konx_badge_counts' );
+		if ( false !== $cached ) {
+			return $cached;
+		}
+
+		global $wpdb;
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$counts = array(
+			'pending_affiliates'  => (int) $wpdb->get_var( $wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->prefix}konx_affiliates WHERE status = %s", 'pending'
+			) ),
+			'pending_withdrawals' => (int) $wpdb->get_var( $wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->prefix}konx_withdrawals WHERE status IN (%s,%s)", 'pending', 'approved'
+			) ),
+			'overdue_fees'        => (int) $wpdb->get_var( $wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->prefix}konx_admin_fees WHERE status = %s", 'overdue'
+			) ),
+		);
+		// phpcs:enable
+
+		set_transient( 'konx_badge_counts', $counts, 5 * MINUTE_IN_SECONDS );
+		return $counts;
+	}
+
+	/**
+	 * Add KonX quick-access menu to the WordPress admin bar.
+	 *
+	 * @param WP_Admin_Bar $wp_admin_bar Admin bar instance.
+	 */
+	public static function add_admin_bar_menu( $wp_admin_bar ) {
+		if ( ! current_user_can( 'manage_konx_settings' ) || ! is_admin() ) {
+			return;
+		}
+
+		$counts = self::get_badge_counts();
+		$total  = $counts['pending_affiliates'] + $counts['pending_withdrawals'] + $counts['overdue_fees'];
+
+		$label = __( 'KonX', 'konx-affiliate-dashboard' );
+		if ( $total > 0 ) {
+			$label .= sprintf( ' <span class="konx-ab-badge">%d</span>', $total );
+		}
+
+		// Parent node.
+		$wp_admin_bar->add_node( array(
+			'id'    => 'konx-dashboard',
+			'title' => '<span class="ab-icon dashicons dashicons-groups" style="margin-top:2px;"></span>' . $label,
+			'href'  => admin_url( 'admin.php?page=konx-affiliate-dashboard' ),
+			'meta'  => array( 'title' => __( 'KonX Affiliate Dashboard', 'konx-affiliate-dashboard' ) ),
+		) );
+
+		// Child nodes.
+		$wp_admin_bar->add_node( array(
+			'parent' => 'konx-dashboard',
+			'id'     => 'konx-ab-overview',
+			'title'  => __( 'Overview', 'konx-affiliate-dashboard' ),
+			'href'   => admin_url( 'admin.php?page=konx-affiliate-dashboard' ),
+		) );
+
+		$aff_label = __( 'Affiliates', 'konx-affiliate-dashboard' );
+		if ( $counts['pending_affiliates'] > 0 ) {
+			$aff_label .= sprintf( ' (%d)', $counts['pending_affiliates'] );
+		}
+		$wp_admin_bar->add_node( array(
+			'parent' => 'konx-dashboard',
+			'id'     => 'konx-ab-affiliates',
+			'title'  => $aff_label,
+			'href'   => admin_url( 'admin.php?page=konx-affiliates' ),
+		) );
+
+		$wd_label = __( 'Withdrawals', 'konx-affiliate-dashboard' );
+		if ( $counts['pending_withdrawals'] > 0 ) {
+			$wd_label .= sprintf( ' (%d)', $counts['pending_withdrawals'] );
+		}
+		$wp_admin_bar->add_node( array(
+			'parent' => 'konx-dashboard',
+			'id'     => 'konx-ab-withdrawals',
+			'title'  => $wd_label,
+			'href'   => admin_url( 'admin.php?page=konx-withdrawals' ),
+		) );
+
+		$wp_admin_bar->add_node( array(
+			'parent' => 'konx-dashboard',
+			'id'     => 'konx-ab-settings',
+			'title'  => __( 'Settings', 'konx-affiliate-dashboard' ),
+			'href'   => admin_url( 'admin.php?page=konx-settings' ),
+		) );
 	}
 
 	public static function render_page() {
@@ -93,7 +240,8 @@ class Konx_Admin_Dashboard {
 					<?php if ( empty( $recent['commissions'] ) ) : ?>
 						<div class="konx-empty-state">
 							<span class="dashicons dashicons-chart-bar"></span>
-							<p><?php esc_html_e( 'No commissions yet. Commissions appear when referred orders are completed.', 'konx-affiliate-dashboard' ); ?></p>
+							<h3><?php esc_html_e( 'No commissions yet', 'konx-affiliate-dashboard' ); ?></h3>
+							<p><?php esc_html_e( 'Commissions appear here when referred orders are completed. Set up product mapping and share affiliate links to get started.', 'konx-affiliate-dashboard' ); ?></p>
 						</div>
 					<?php else : ?>
 						<div class="konx-table-wrap">
@@ -128,7 +276,8 @@ class Konx_Admin_Dashboard {
 					<?php if ( empty( $recent['withdrawals'] ) ) : ?>
 						<div class="konx-empty-state">
 							<span class="dashicons dashicons-money-alt"></span>
-							<p><?php esc_html_e( 'No withdrawals yet. Affiliates can request withdrawals from their dashboard.', 'konx-affiliate-dashboard' ); ?></p>
+							<h3><?php esc_html_e( 'No withdrawals yet', 'konx-affiliate-dashboard' ); ?></h3>
+							<p><?php esc_html_e( 'Withdrawal requests appear here when affiliates request payouts from their dashboard.', 'konx-affiliate-dashboard' ); ?></p>
 						</div>
 					<?php else : ?>
 						<div class="konx-table-wrap">
