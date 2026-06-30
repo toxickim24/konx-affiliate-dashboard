@@ -601,3 +601,415 @@
 		flex-direction: column;
 	}
 }
+
+/* ================================================================
+ * Operations Dashboard
+ * ============================================================= */
+
+/* Section titles */
+.konx-ops-section {
+	margin-bottom: var(--konx-space-lg);
+}
+
+.konx-ops-section-title {
+	display: flex;
+	align-items: center;
+	gap: var(--konx-space-sm);
+	font-size: 16px;
+	font-weight: 700;
+	color: var(--konx-text);
+	margin: 0 0 var(--konx-space-base) 0;
+	padding: 0;
+	border: none;
+}
+
+.konx-ops-section-title .dashicons {
+	font-size: 20px;
+	width: 20px;
+	height: 20px;
+	color: var(--konx-primary);
+}
+
+.konx-ops-row {
+	margin-bottom: var(--konx-space-lg);
+	align-items: stretch;
+}
+
+/* ================================================================
+ * KPI Cards Grid
+ * ============================================================= */
+.konx-kpi-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	gap: var(--konx-space-md);
+}
+
+.konx-kpi-card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--konx-space-xs);
+	background: var(--konx-bg-white);
+	border: 1px solid var(--konx-border);
+	border-radius: var(--konx-radius);
+	padding: var(--konx-space-lg) var(--konx-space-base);
+	text-decoration: none;
+	color: var(--konx-text);
+	transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+	box-shadow: var(--konx-shadow);
+	text-align: center;
+}
+
+.konx-kpi-card:hover {
+	border-color: var(--konx-primary);
+	box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+	transform: translateY(-2px);
+	color: var(--konx-text);
+}
+
+.konx-kpi-card:focus {
+	outline: 2px solid var(--konx-primary);
+	outline-offset: 2px;
+	color: var(--konx-text);
+}
+
+.konx-kpi-icon .dashicons {
+	font-size: 28px;
+	width: 28px;
+	height: 28px;
+	color: var(--konx-primary);
+}
+
+.konx-kpi-value {
+	display: block;
+	font-size: 28px;
+	font-weight: 700;
+	color: var(--konx-text);
+	line-height: 1.2;
+}
+
+.konx-kpi-label {
+	display: block;
+	font-size: 12px;
+	color: var(--konx-text-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+/* ================================================================
+ * Action Required
+ * ============================================================= */
+.konx-ops-all-clear {
+	display: flex;
+	align-items: center;
+	gap: var(--konx-space-md);
+	padding: var(--konx-space-lg);
+	background: var(--konx-success-bg);
+	border: 1px solid #c3e6cb;
+	border-radius: var(--konx-radius);
+}
+
+.konx-ops-all-clear .dashicons {
+	font-size: 32px;
+	width: 32px;
+	height: 32px;
+	color: var(--konx-success);
+	flex-shrink: 0;
+}
+
+.konx-ops-all-clear strong {
+	display: block;
+	font-size: 15px;
+	color: var(--konx-text);
+}
+
+.konx-ops-all-clear p {
+	margin: 2px 0 0;
+	font-size: 13px;
+	color: var(--konx-text-secondary);
+}
+
+.konx-action-list {
+	background: var(--konx-bg-white);
+	border: 1px solid var(--konx-border);
+	border-radius: var(--konx-radius);
+	overflow: hidden;
+	box-shadow: var(--konx-shadow);
+}
+
+.konx-action-item {
+	display: flex;
+	align-items: center;
+	gap: var(--konx-space-md);
+	padding: var(--konx-space-md) var(--konx-space-base);
+	border-bottom: 1px solid var(--konx-border-light);
+}
+
+.konx-action-item:last-child {
+	border-bottom: none;
+}
+
+.konx-action-item-warning {
+	border-left: 3px solid var(--konx-warning);
+}
+
+.konx-action-item-danger {
+	border-left: 3px solid var(--konx-danger);
+}
+
+.konx-action-item-info {
+	border-left: 3px solid var(--konx-info);
+}
+
+.konx-action-icon .dashicons {
+	font-size: 20px;
+	width: 20px;
+	height: 20px;
+	flex-shrink: 0;
+}
+
+.konx-action-item-warning .konx-action-icon .dashicons {
+	color: var(--konx-warning);
+}
+
+.konx-action-item-danger .konx-action-icon .dashicons {
+	color: var(--konx-danger);
+}
+
+.konx-action-item-info .konx-action-icon .dashicons {
+	color: var(--konx-info);
+}
+
+.konx-action-label {
+	flex: 1;
+	font-size: 14px;
+	color: var(--konx-text);
+	font-weight: 500;
+}
+
+/* ================================================================
+ * Platform Health Card
+ * ============================================================= */
+.konx-health-card h2 {
+	display: flex;
+	align-items: center;
+	gap: var(--konx-space-sm);
+}
+
+.konx-health-card h2 .dashicons {
+	color: var(--konx-danger);
+}
+
+.konx-health-score {
+	text-align: center;
+	padding: var(--konx-space-base) 0 var(--konx-space-lg);
+}
+
+.konx-health-pct {
+	display: block;
+	font-size: 42px;
+	font-weight: 800;
+	line-height: 1;
+}
+
+.konx-health-label {
+	display: block;
+	font-size: 13px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	margin-top: var(--konx-space-xs);
+	font-weight: 600;
+}
+
+.konx-health-excellent .konx-health-pct,
+.konx-health-excellent .konx-health-label {
+	color: var(--konx-success);
+}
+
+.konx-health-good .konx-health-pct,
+.konx-health-good .konx-health-label {
+	color: var(--konx-primary);
+}
+
+.konx-health-needs-attention .konx-health-pct,
+.konx-health-needs-attention .konx-health-label {
+	color: var(--konx-warning);
+}
+
+.konx-health-checks {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	border-top: 1px solid var(--konx-border-light);
+}
+
+.konx-health-row {
+	display: flex;
+	align-items: center;
+	gap: var(--konx-space-sm);
+	padding: var(--konx-space-sm) 0;
+	border-bottom: 1px solid var(--konx-border-light);
+	font-size: 13px;
+}
+
+.konx-health-row:last-child {
+	border-bottom: none;
+}
+
+.konx-health-indicator {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+.konx-health-indicator-ok {
+	background: var(--konx-success);
+}
+
+.konx-health-indicator-warning {
+	background: var(--konx-warning);
+}
+
+.konx-health-indicator-error {
+	background: var(--konx-danger);
+}
+
+.konx-health-check-label {
+	flex: 1;
+	font-weight: 500;
+	color: var(--konx-text);
+}
+
+.konx-health-check-detail {
+	color: var(--konx-text-secondary);
+	font-size: 12px;
+}
+
+.konx-health-footer {
+	margin-top: var(--konx-space-base);
+	padding-top: var(--konx-space-md);
+	border-top: 1px solid var(--konx-border-light);
+	text-align: center;
+}
+
+/* ================================================================
+ * Quick Actions Card
+ * ============================================================= */
+.konx-quick-actions-card {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+.konx-quick-actions-card h2 {
+	display: flex;
+	align-items: center;
+	gap: var(--konx-space-sm);
+}
+
+.konx-quick-actions-card h2 .dashicons {
+	color: var(--konx-primary);
+}
+
+.konx-quick-actions-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--konx-space-sm);
+	flex: 1;
+}
+
+.konx-quick-action {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	gap: 4px;
+	padding: var(--konx-space-md) var(--konx-space-sm);
+	border: 1px solid var(--konx-border-light);
+	border-radius: var(--konx-radius);
+	text-decoration: none;
+	color: var(--konx-text);
+	transition: border-color 0.15s, background 0.15s;
+}
+
+.konx-quick-action:hover {
+	border-color: var(--konx-primary);
+	background: var(--konx-info-bg);
+	color: var(--konx-text);
+}
+
+.konx-quick-action:focus {
+	outline: 2px solid var(--konx-primary);
+	outline-offset: 2px;
+	color: var(--konx-text);
+}
+
+.konx-quick-action .dashicons {
+	font-size: 24px;
+	width: 24px;
+	height: 24px;
+	color: var(--konx-primary);
+}
+
+.konx-quick-action strong {
+	font-size: 13px;
+	line-height: 1.3;
+}
+
+.konx-quick-action span:last-child {
+	font-size: 11px;
+	color: var(--konx-text-secondary);
+	line-height: 1.3;
+}
+
+/* ================================================================
+ * Operations Dashboard Responsive
+ * ============================================================= */
+@media (max-width: 1200px) {
+	.konx-kpi-grid {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+
+@media (max-width: 1024px) {
+	.konx-kpi-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+
+	.konx-quick-actions-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+@media (max-width: 782px) {
+	.konx-kpi-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+
+	.konx-kpi-value {
+		font-size: 22px;
+	}
+
+	.konx-quick-actions-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.konx-action-item {
+		flex-wrap: wrap;
+	}
+
+	.konx-action-label {
+		flex-basis: calc(100% - 40px);
+	}
+}
+
+@media (max-width: 480px) {
+	.konx-kpi-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.konx-health-pct {
+		font-size: 32px;
+	}
+}
