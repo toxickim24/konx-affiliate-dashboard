@@ -28,6 +28,7 @@ class Konx_Migration_Wizard {
 	 */
 	private static $steps = array(
 		'welcome'     => 'Welcome',
+		'source'      => 'Data Source',
 		'health'      => 'Health Check',
 		'types'       => 'Type Mapping',
 		'sponsors'    => 'Sponsors',
@@ -43,6 +44,7 @@ class Konx_Migration_Wizard {
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
 		add_action( 'admin_post_konx_migration_scan', array( __CLASS__, 'handle_scan' ) );
+		add_action( 'admin_post_konx_migration_csv_upload', array( __CLASS__, 'handle_csv_upload' ) );
 		add_action( 'admin_post_konx_migration_dry_run', array( __CLASS__, 'handle_dry_run' ) );
 		add_action( 'admin_post_konx_migration_approve', array( __CLASS__, 'handle_approve' ) );
 	}
@@ -97,6 +99,9 @@ class Konx_Migration_Wizard {
 			<div style="max-width:960px;margin-top:20px;">
 				<?php
 				switch ( $step ) {
+					case 'source':
+						self::render_source( $state );
+						break;
 					case 'health':
 						self::render_health( $state );
 						break;
@@ -210,20 +215,153 @@ class Konx_Migration_Wizard {
 		</div>
 
 		<div style="display:flex;gap:8px;">
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-				<input type="hidden" name="action" value="konx_migration_scan">
-				<?php wp_nonce_field( 'konx_migration_scan', 'konx_mig_nonce' ); ?>
-				<?php submit_button( $scan ? __( 'Run Fresh Scan', 'konx-affiliate-dashboard' ) : __( 'Start Scan', 'konx-affiliate-dashboard' ), 'primary', '', false ); ?>
-			</form>
 			<?php if ( $scan ) : ?>
-				<a href="<?php echo esc_url( admin_url( 'admin.php?page=konx-migration&step=health' ) ); ?>" class="button"><?php esc_html_e( 'Continue to Health Check', 'konx-affiliate-dashboard' ); ?></a>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=konx-migration&step=health' ) ); ?>" class="button button-primary"><?php esc_html_e( 'Continue to Health Check', 'konx-affiliate-dashboard' ); ?></a>
+			<?php else : ?>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=konx-migration&step=source' ) ); ?>" class="button button-primary"><?php esc_html_e( 'Choose Data Source', 'konx-affiliate-dashboard' ); ?></a>
 			<?php endif; ?>
 		</div>
 		<?php
 	}
 
 	// ------------------------------------------------------------------
-	// Step 2: Health Check
+	// Step 2: Data Source Selection
+	// ------------------------------------------------------------------
+
+	/**
+	 * Render the Data Source selection step.
+	 *
+	 * @param array $state Migration state.
+	 */
+	private static function render_source( $state ) {
+		$source    = isset( $state['source'] ) ? $state['source'] : null;
+		$csv_info  = isset( $state['csv_info'] ) ? $state['csv_info'] : null;
+		$has_db    = false;
+
+		// Check if local PO10 DB is accessible (developer convenience).
+		$engine = new Konx_Migration_Engine();
+		$has_db = $engine->test_po10_connection();
+
+		?>
+		<h2><?php esc_html_e( 'Choose Migration Data Source', 'konx-affiliate-dashboard' ); ?></h2>
+
+		<div class="notice notice-info inline" style="margin:0 0 16px;">
+			<p><strong><?php esc_html_e( 'CSV Upload is recommended for live migration.', 'konx-affiliate-dashboard' ); ?></strong>
+			<?php esc_html_e( 'Direct database access should only be used in local development or controlled staging environments.', 'konx-affiliate-dashboard' ); ?></p>
+		</div>
+
+		<!-- CSV Upload (Recommended) -->
+		<div class="konx-card" style="margin-bottom:16px;border-left:4px solid #00a32a;">
+			<h3 style="margin-top:0;">
+				<?php echo wp_kses_post( self::badge( 'ok', __( 'Recommended', 'konx-affiliate-dashboard' ) ) ); ?>
+				<?php esc_html_e( 'CSV Upload from PowerOf10', 'konx-affiliate-dashboard' ); ?>
+			</h3>
+			<p class="description"><?php esc_html_e( 'Upload a CSV file exported from the PowerOf10 admin panel. This is the safest method for production migration — no database credentials needed.', 'konx-affiliate-dashboard' ); ?></p>
+
+			<?php if ( $csv_info && 'csv' === $source ) : ?>
+				<div class="notice notice-success inline" style="margin:8px 0;">
+					<p>
+						<?php
+						printf(
+							esc_html__( 'CSV loaded: %1$s rows, %2$s columns. File: %3$s', 'konx-affiliate-dashboard' ),
+							esc_html( number_format( $csv_info['row_count'] ) ),
+							esc_html( count( $csv_info['columns_found'] ) ),
+							esc_html( $csv_info['file_name'] )
+						);
+						?>
+					</p>
+				</div>
+			<?php endif; ?>
+
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data" style="margin-top:12px;">
+				<input type="hidden" name="action" value="konx_migration_csv_upload">
+				<?php wp_nonce_field( 'konx_migration_csv_upload', 'konx_csv_nonce' ); ?>
+				<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+					<div>
+						<label for="konx-csv-file" style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">
+							<?php esc_html_e( 'Select CSV File', 'konx-affiliate-dashboard' ); ?>
+						</label>
+						<input type="file" id="konx-csv-file" name="csv_file" accept=".csv" required>
+					</div>
+					<?php submit_button( __( 'Upload & Validate', 'konx-affiliate-dashboard' ), 'primary', '', false ); ?>
+				</div>
+				<p class="description" style="margin-top:8px;">
+					<?php
+					printf(
+						esc_html__( 'Required columns: %s. Max file size: 10 MB.', 'konx-affiliate-dashboard' ),
+						'<code>' . esc_html( implode( ', ', Konx_Migration_Engine::get_required_csv_columns() ) ) . '</code>'
+					);
+					?>
+				</p>
+			</form>
+		</div>
+
+		<!-- CSV Validation Results -->
+		<?php if ( $csv_info && isset( $csv_info['columns_found'] ) ) : ?>
+			<div class="konx-card" style="margin-bottom:16px;">
+				<h3 style="margin-top:0;"><?php esc_html_e( 'CSV Validation', 'konx-affiliate-dashboard' ); ?></h3>
+				<table class="widefat fixed striped" style="max-width:600px;">
+					<tbody>
+						<tr>
+							<td><strong><?php esc_html_e( 'Rows', 'konx-affiliate-dashboard' ); ?></strong></td>
+							<td><?php echo esc_html( number_format( $csv_info['row_count'] ) ); ?></td>
+							<td><?php echo wp_kses_post( self::badge( $csv_info['row_count'] > 0 ? 'ok' : 'error' ) ); ?></td>
+						</tr>
+						<tr>
+							<td><strong><?php esc_html_e( 'Required Columns', 'konx-affiliate-dashboard' ); ?></strong></td>
+							<td><?php echo empty( $csv_info['columns_missing'] ) ? esc_html__( 'All present', 'konx-affiliate-dashboard' ) : esc_html__( 'Missing: ', 'konx-affiliate-dashboard' ) . esc_html( implode( ', ', $csv_info['columns_missing'] ) ); ?></td>
+							<td><?php echo wp_kses_post( self::badge( empty( $csv_info['columns_missing'] ) ? 'ok' : 'error' ) ); ?></td>
+						</tr>
+						<tr>
+							<td><strong><?php esc_html_e( 'Optional Columns', 'konx-affiliate-dashboard' ); ?></strong></td>
+							<td><?php echo empty( $csv_info['columns_optional'] ) ? esc_html__( 'None', 'konx-affiliate-dashboard' ) : esc_html( implode( ', ', $csv_info['columns_optional'] ) ); ?></td>
+							<td><?php echo wp_kses_post( self::badge( 'ok' ) ); ?></td>
+						</tr>
+						<tr>
+							<td><strong><?php esc_html_e( 'File Size', 'konx-affiliate-dashboard' ); ?></strong></td>
+							<td><?php echo esc_html( size_format( $csv_info['file_size'] ) ); ?></td>
+							<td><?php echo wp_kses_post( self::badge( 'ok' ) ); ?></td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		<?php endif; ?>
+
+		<!-- Local Database (Developer Only) -->
+		<div class="konx-card" style="margin-bottom:16px;border-left:4px solid #dba617;opacity:0.85;">
+			<h3 style="margin-top:0;">
+				<?php echo wp_kses_post( self::badge( 'warning', __( 'Developer Only', 'konx-affiliate-dashboard' ) ) ); ?>
+				<?php esc_html_e( 'Local PowerOf10 Database Scan', 'konx-affiliate-dashboard' ); ?>
+			</h3>
+			<p class="description"><?php esc_html_e( 'Directly query the PowerOf10 database on this server. Only use for local development or controlled staging environments.', 'konx-affiliate-dashboard' ); ?></p>
+
+			<?php if ( $has_db ) : ?>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:8px;">
+					<input type="hidden" name="action" value="konx_migration_scan">
+					<input type="hidden" name="source" value="database">
+					<?php wp_nonce_field( 'konx_migration_scan', 'konx_mig_nonce' ); ?>
+					<?php submit_button( __( 'Scan Local Database', 'konx-affiliate-dashboard' ), 'secondary', '', false ); ?>
+				</form>
+				<?php if ( 'database' === $source ) : ?>
+					<div class="notice notice-success inline" style="margin:8px 0;">
+						<p><?php esc_html_e( 'Local database scan loaded.', 'konx-affiliate-dashboard' ); ?></p>
+					</div>
+				<?php endif; ?>
+			<?php else : ?>
+				<p style="color:#d63638;margin-top:8px;"><?php esc_html_e( 'PowerOf10 database not accessible on this server.', 'konx-affiliate-dashboard' ); ?></p>
+			<?php endif; ?>
+		</div>
+
+		<?php if ( $source ) : ?>
+			<?php self::render_nav( 'welcome', 'health' ); ?>
+		<?php else : ?>
+			<?php self::render_nav( 'welcome', null ); ?>
+		<?php endif; ?>
+		<?php
+	}
+
+	// ------------------------------------------------------------------
+	// Step 3: Health Check
 	// ------------------------------------------------------------------
 
 	/**
@@ -275,7 +413,7 @@ class Konx_Migration_Wizard {
 			</tbody>
 		</table>
 
-		<?php self::render_nav( 'welcome', 'types' ); ?>
+		<?php self::render_nav( 'source', 'types' ); ?>
 		<?php
 	}
 
@@ -291,7 +429,7 @@ class Konx_Migration_Wizard {
 	private static function render_types( $state ) {
 		if ( ! isset( $state['scan'] ) ) { self::render_no_scan(); return; }
 
-		$engine = new Konx_Migration_Engine();
+		$engine = self::build_engine_from_state();
 		$types  = $engine->analyze_affiliate_types();
 
 		$normalized_cnt = 0;
@@ -358,7 +496,7 @@ class Konx_Migration_Wizard {
 	private static function render_sponsors( $state ) {
 		if ( ! isset( $state['scan'] ) ) { self::render_no_scan(); return; }
 
-		$engine   = new Konx_Migration_Engine();
+		$engine   = self::build_engine_from_state();
 		$sponsors = $engine->analyze_sponsors();
 
 		?>
@@ -441,7 +579,7 @@ class Konx_Migration_Wizard {
 	private static function render_conflicts( $state ) {
 		if ( ! isset( $state['scan'] ) ) { self::render_no_scan(); return; }
 
-		$engine    = new Konx_Migration_Engine();
+		$engine    = self::build_engine_from_state();
 		$conflicts = $engine->detect_conflicts();
 
 		?>
@@ -531,7 +669,7 @@ class Konx_Migration_Wizard {
 		$limit  = 50;
 		$offset = ( $page - 1 ) * $limit;
 
-		$engine  = new Konx_Migration_Engine();
+		$engine  = self::build_engine_from_state();
 		$records = $engine->prepare_batch( $offset, $limit );
 		$total   = isset( $state['scan']['po10_users'] ) ? (int) $state['scan']['po10_users'] : 0;
 		$pages   = max( 1, (int) ceil( $total / $limit ) );
@@ -774,18 +912,102 @@ class Konx_Migration_Wizard {
 
 		if ( is_wp_error( $scan ) ) {
 			self::set_feedback( 'error', $scan->get_error_message() );
-			wp_safe_redirect( admin_url( 'admin.php?page=konx-migration' ) );
+			wp_safe_redirect( admin_url( 'admin.php?page=konx-migration&step=source' ) );
 			exit;
 		}
 
 		$state = get_option( 'konx_migration_state', array() );
+		$state['source']  = 'database';
 		$state['scan']    = $scan;
 		$state['scan_at'] = current_time( 'mysql', true );
-		// Clear stale dry-run and approval on fresh scan.
+		unset( $state['dry_run'], $state['dry_run_at'], $state['approved'], $state['approved_by'], $state['approved_at'], $state['csv_info'] );
+		update_option( 'konx_migration_state', $state, false );
+
+		self::set_feedback( 'success', __( 'Database scan completed successfully.', 'konx-affiliate-dashboard' ) );
+		wp_safe_redirect( admin_url( 'admin.php?page=konx-migration&step=health' ) );
+		exit;
+	}
+
+	/**
+	 * Handle CSV file upload and validation.
+	 */
+	public static function handle_csv_upload() {
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
+		}
+		check_admin_referer( 'konx_migration_csv_upload', 'konx_csv_nonce' );
+
+		if ( empty( $_FILES['csv_file'] ) || UPLOAD_ERR_OK !== $_FILES['csv_file']['error'] ) {
+			self::set_feedback( 'error', __( 'No file uploaded or upload error occurred.', 'konx-affiliate-dashboard' ) );
+			wp_safe_redirect( admin_url( 'admin.php?page=konx-migration&step=source' ) );
+			exit;
+		}
+
+		$file = $_FILES['csv_file']; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+
+		// Validate file extension.
+		$ext = strtolower( pathinfo( sanitize_file_name( $file['name'] ), PATHINFO_EXTENSION ) );
+		if ( 'csv' !== $ext ) {
+			self::set_feedback( 'error', __( 'Invalid file type. Only .csv files are accepted.', 'konx-affiliate-dashboard' ) );
+			wp_safe_redirect( admin_url( 'admin.php?page=konx-migration&step=source' ) );
+			exit;
+		}
+
+		// Validate CSV structure.
+		$validation = Konx_Migration_Engine::validate_csv( $file['tmp_name'] );
+		if ( is_wp_error( $validation ) ) {
+			self::set_feedback( 'error', $validation->get_error_message() );
+			wp_safe_redirect( admin_url( 'admin.php?page=konx-migration&step=source' ) );
+			exit;
+		}
+
+		if ( ! $validation['valid'] ) {
+			$msg = __( 'CSV validation failed.', 'konx-affiliate-dashboard' );
+			if ( ! empty( $validation['columns_missing'] ) ) {
+				$msg .= ' ' . sprintf( __( 'Missing columns: %s', 'konx-affiliate-dashboard' ), implode( ', ', $validation['columns_missing'] ) );
+			}
+			self::set_feedback( 'error', $msg );
+
+			// Store partial validation for display.
+			$state = get_option( 'konx_migration_state', array() );
+			$validation['file_name'] = sanitize_file_name( $file['name'] );
+			$state['csv_info'] = $validation;
+			update_option( 'konx_migration_state', $state, false );
+
+			wp_safe_redirect( admin_url( 'admin.php?page=konx-migration&step=source' ) );
+			exit;
+		}
+
+		// Load CSV into engine and run scan.
+		$engine = new Konx_Migration_Engine();
+		$loaded = $engine->load_from_csv( $file['tmp_name'] );
+
+		if ( is_wp_error( $loaded ) ) {
+			self::set_feedback( 'error', $loaded->get_error_message() );
+			wp_safe_redirect( admin_url( 'admin.php?page=konx-migration&step=source' ) );
+			exit;
+		}
+
+		$scan = $engine->scan_data_sources();
+
+		// Cache the parsed records in state so future steps don't need the file.
+		$records_raw = $engine->get_source_records();
+		$records_serializable = array();
+		foreach ( $records_raw as $r ) {
+			$records_serializable[] = (array) $r;
+		}
+
+		$state = get_option( 'konx_migration_state', array() );
+		$validation['file_name'] = sanitize_file_name( $file['name'] );
+		$state['source']        = 'csv';
+		$state['csv_info']      = $validation;
+		$state['csv_records']   = $records_serializable;
+		$state['scan']          = $scan;
+		$state['scan_at']       = current_time( 'mysql', true );
 		unset( $state['dry_run'], $state['dry_run_at'], $state['approved'], $state['approved_by'], $state['approved_at'] );
 		update_option( 'konx_migration_state', $state, false );
 
-		self::set_feedback( 'success', __( 'Scan completed successfully.', 'konx-affiliate-dashboard' ) );
+		self::set_feedback( 'success', sprintf( __( 'CSV uploaded: %d records loaded and validated.', 'konx-affiliate-dashboard' ), $validation['row_count'] ) );
 		wp_safe_redirect( admin_url( 'admin.php?page=konx-migration&step=health' ) );
 		exit;
 	}
@@ -799,7 +1021,7 @@ class Konx_Migration_Wizard {
 		}
 		check_admin_referer( 'konx_migration_dry_run', 'konx_dr_nonce' );
 
-		$engine = new Konx_Migration_Engine();
+		$engine = self::build_engine_from_state();
 		$dr     = $engine->dry_run();
 
 		$state = get_option( 'konx_migration_state', array() );
@@ -927,6 +1149,37 @@ class Konx_Migration_Wizard {
 	 * @param string $type    'success' or 'error'.
 	 * @param string $message Message.
 	 */
+	/**
+	 * Build a migration engine instance from the stored state.
+	 *
+	 * If the source is CSV, restores cached records from state.
+	 * If the source is database, returns a standard DB-backed engine.
+	 *
+	 * @return Konx_Migration_Engine
+	 */
+	private static function build_engine_from_state() {
+		$state  = get_option( 'konx_migration_state', array() );
+		$engine = new Konx_Migration_Engine();
+
+		if ( 'csv' === ( $state['source'] ?? '' ) && ! empty( $state['csv_records'] ) ) {
+			// Restore cached CSV records as objects.
+			$records = array();
+			foreach ( $state['csv_records'] as $r ) {
+				$records[] = (object) $r;
+			}
+			// Use reflection to set private properties since load_from_csv expects a file.
+			$ref = new \ReflectionClass( $engine );
+			$prop_records = $ref->getProperty( 'records' );
+			$prop_records->setAccessible( true );
+			$prop_records->setValue( $engine, $records );
+			$prop_source = $ref->getProperty( 'source' );
+			$prop_source->setAccessible( true );
+			$prop_source->setValue( $engine, 'csv' );
+		}
+
+		return $engine;
+	}
+
 	private static function set_feedback( $type, $message ) {
 		set_transient( 'konx_migration_feedback', array( 'type' => $type, 'message' => $message ), 30 );
 	}

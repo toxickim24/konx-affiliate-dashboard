@@ -5,13 +5,19 @@ Located under KonX Affiliates > Migration in the WordPress admin menu.
 
 ## Wizard Flow
 
-The wizard has 8 steps. Each step uses the Migration Engine
+The wizard has 9 steps. Each step uses the Migration Engine
 (`Konx_Migration_Engine`) for read-only data analysis.
 
 ### Step 1 — Welcome
 
 Shows summary cards (PO10 users, WP users, KonX affiliates, missing
-users) and a "Run Fresh Scan" button. Displays last scan timestamp.
+users) and links to the data source selection step.
+
+### Step 2 — Data Source
+
+Choose between CSV Upload (recommended for production) and Local
+Database Scan (developer only). CSV uploads are validated for required
+columns and row count before proceeding. See `csv-import.md`.
 
 ### Step 2 — Health Check
 
