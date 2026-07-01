@@ -710,13 +710,13 @@ class Konx_Admin_Dashboard {
 				'icon'  => 'dashicons-database-import',
 				'title' => __( 'Migration Wizard', 'konx-affiliate-dashboard' ),
 				'desc'  => __( 'Import data from PowerOf10 or other sources', 'konx-affiliate-dashboard' ),
-				'url'   => admin_url( 'admin.php?page=konx-setup-wizard' ),
+				'url'   => admin_url( 'admin.php?page=konx-migration' ),
 			),
 			array(
 				'icon'  => 'dashicons-editor-help',
 				'title' => __( 'Help Center', 'konx-affiliate-dashboard' ),
 				'desc'  => __( 'Documentation and getting started guides', 'konx-affiliate-dashboard' ),
-				'url'   => admin_url( 'admin.php?page=konx-help' ),
+				'url'   => admin_url( 'admin.php?page=konx-tools&tab=help' ),
 			),
 		);
 		?>
@@ -847,7 +847,7 @@ class Konx_Admin_Dashboard {
 			'label'    => __( 'Data Migration', 'konx-affiliate-dashboard' ),
 			'status'   => $mig_state,
 			'detail'   => $mig_detail,
-			'url'      => admin_url( 'admin.php?page=konx-affiliate-dashboard' ), // fallback
+			'url'      => admin_url( 'admin.php?page=konx-migration' ),
 			'required' => false,
 		);
 
@@ -894,9 +894,7 @@ class Konx_Admin_Dashboard {
 					</span>
 				</div>
 				<?php if ( $setup['is_ready'] ) : ?>
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=konx-affiliate-dashboard' ) ); ?>" class="button button-primary button-hero">
-						<?php esc_html_e( 'Go to Dashboard', 'konx-affiliate-dashboard' ); ?>
-					</a>
+					<span class="konx-setup-badge-complete"><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'All Set', 'konx-affiliate-dashboard' ); ?></span>
 				<?php elseif ( $setup['first_incomplete_url'] ) : ?>
 					<a href="<?php echo esc_url( $setup['first_incomplete_url'] ); ?>" class="button button-primary button-hero">
 						<?php esc_html_e( 'Complete Setup', 'konx-affiliate-dashboard' ); ?>

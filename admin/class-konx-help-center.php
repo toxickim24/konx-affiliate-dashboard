@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Konx_Help_Center {
 
 	public static function init() {
-		// Menu registered by Konx_Tools_Page.
+		// Help Center renders as a tab inside Tools — no separate menu needed.
 	}
 
 	public static function register_menu() {
