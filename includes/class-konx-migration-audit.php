@@ -37,6 +37,8 @@ class Konx_Migration_Audit {
 		$field_map  = isset( $state['field_mappings'] ) ? $state['field_mappings'] : null;
 		$csv_info   = isset( $state['csv_info'] ) ? $state['csv_info'] : null;
 
+		$resolutions     = isset( $state['sponsor_resolutions'] ) ? $state['sponsor_resolutions'] : array();
+		$existing_system = isset( $state['existing_system'] ) ? $state['existing_system'] : null;
 		$decision_matrix = isset( $state['decision_matrix']['summary'] ) ? $state['decision_matrix']['summary'] : null;
 
 		return array(
@@ -51,6 +53,8 @@ class Konx_Migration_Audit {
 			'duplicates'   => $validation ? self::build_duplicate_report( $validation ) : null,
 			'comparison'   => $comparison ? self::build_comparison_summary( $comparison ) : null,
 			'sponsors'     => self::build_sponsor_report( $scan, $comparison ),
+			'sponsor_resolutions' => self::build_resolution_summary( $resolutions ),
+			'existing_system' => $existing_system,
 			'decision_matrix' => $decision_matrix,
 			'readiness'    => $summary['readiness'],
 			'approved'     => ! empty( $state['approved'] ),
@@ -255,6 +259,44 @@ class Konx_Migration_Audit {
 			__( 'No WordPress users have been created.', 'konx-affiliate-dashboard' ),
 			__( 'No affiliate records have been written to production tables.', 'konx-affiliate-dashboard' ),
 			__( 'Migration execution is not yet available. This report is for review purposes only.', 'konx-affiliate-dashboard' ),
+		);
+	}
+
+	/**
+	 * Build sponsor resolution summary from stored decisions.
+	 *
+	 * @param array $resolutions The sponsor_resolutions from state.
+	 * @return array Summary data.
+	 */
+	private static function build_resolution_summary( $resolutions ) {
+		if ( empty( $resolutions ) ) {
+			return array(
+				'total_decisions' => 0,
+				'accepted'        => 0,
+				'root'            => 0,
+				'ignored'         => 0,
+				'details'         => array(),
+			);
+		}
+
+		$accepted = 0;
+		$root     = 0;
+		$ignored  = 0;
+		$details  = array();
+
+		foreach ( $resolutions as $orphan => $action ) {
+			if ( 'accept' === $action ) { $accepted++; }
+			if ( 'root' === $action ) { $root++; }
+			if ( 'ignore' === $action ) { $ignored++; }
+			$details[] = array( 'orphan' => $orphan, 'action' => $action );
+		}
+
+		return array(
+			'total_decisions' => count( $resolutions ),
+			'accepted'        => $accepted,
+			'root'            => $root,
+			'ignored'         => $ignored,
+			'details'         => $details,
 		);
 	}
 
