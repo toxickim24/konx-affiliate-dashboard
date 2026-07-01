@@ -249,9 +249,20 @@
 	margin-bottom: var(--konx-space-md);
 }
 
+.konx-empty-state h3 {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--konx-text);
+	margin: 0 0 var(--konx-space-xs);
+}
+
 .konx-empty-state p {
-	font-size: 14px;
+	font-size: 13px;
 	margin: 0;
+	max-width: 360px;
+	margin-left: auto;
+	margin-right: auto;
+	line-height: 1.5;
 }
 
 /* ================================================================
@@ -1011,5 +1022,110 @@
 
 	.konx-health-pct {
 		font-size: 32px;
+	}
+}
+
+/* ================================================================
+ * Admin Bar Badge
+ * ============================================================= */
+#wpadminbar .konx-ab-badge {
+	display: inline-block;
+	min-width: 18px;
+	height: 18px;
+	line-height: 18px;
+	padding: 0 5px;
+	border-radius: 9px;
+	background: #d63638;
+	color: #fff;
+	font-size: 11px;
+	font-weight: 600;
+	text-align: center;
+	margin-left: 4px;
+	vertical-align: middle;
+}
+
+/* ================================================================
+ * Settings Tab Responsive
+ * ============================================================= */
+@media (max-width: 782px) {
+	.nav-tab-wrapper {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 2px;
+	}
+
+	.nav-tab-wrapper .nav-tab {
+		flex: 1 1 auto;
+		text-align: center;
+		font-size: 12px;
+		padding: 6px 10px;
+		white-space: nowrap;
+	}
+}
+
+/* ================================================================
+ * Improved Empty States
+ * ============================================================= */
+.konx-empty-state-lg {
+	text-align: center;
+	padding: var(--konx-space-2xl) var(--konx-space-xl);
+	color: var(--konx-text-secondary);
+	background: var(--konx-bg-white);
+	border: 2px dashed var(--konx-border-light);
+	border-radius: var(--konx-radius);
+}
+
+.konx-empty-state-lg .dashicons {
+	font-size: 56px;
+	width: 56px;
+	height: 56px;
+	color: var(--konx-border);
+	margin-bottom: var(--konx-space-md);
+}
+
+.konx-empty-state-lg h3 {
+	font-size: 16px;
+	color: var(--konx-text);
+	margin: 0 0 var(--konx-space-sm);
+}
+
+.konx-empty-state-lg p {
+	font-size: 14px;
+	margin: 0 0 var(--konx-space-base);
+	max-width: 400px;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+/* ================================================================
+ * Setup Checklist Improvements
+ * ============================================================= */
+.konx-setup-card {
+	position: relative;
+}
+
+.konx-setup-item:hover {
+	background: var(--konx-bg);
+}
+
+.konx-setup-item .button-small {
+	white-space: nowrap;
+}
+
+/* ================================================================
+ * Print Styles
+ * ============================================================= */
+@media print {
+	#wpadminbar, #adminmenumain, #wpfooter,
+	.konx-page-header .button,
+	.nav-tab-wrapper,
+	.notice { display: none !important; }
+
+	.wrap { margin: 0 !important; padding: 0 !important; }
+
+	.konx-card, .konx-setup-card, .konx-form-card {
+		box-shadow: none !important;
+		border: 1px solid #ddd !important;
+		page-break-inside: avoid;
 	}
 }
