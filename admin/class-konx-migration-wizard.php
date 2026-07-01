@@ -34,6 +34,7 @@ class Konx_Migration_Wizard {
 		'types'             => 'Type Mapping',
 		'sponsors'          => 'Sponsors',
 		'conflicts'         => 'Conflicts',
+		'decision-matrix'   => 'Decision Matrix',
 		'validation'        => 'Validation',
 		'source-comparison' => 'Comparison',
 		'summary'           => 'Summary',
@@ -54,6 +55,7 @@ class Konx_Migration_Wizard {
 		add_action( 'admin_post_konx_migration_export_validation', array( __CLASS__, 'handle_export_validation' ) );
 		add_action( 'admin_post_konx_migration_export_comparison', array( __CLASS__, 'handle_export_comparison' ) );
 		add_action( 'admin_post_konx_migration_export_summary', array( __CLASS__, 'handle_export_summary' ) );
+		add_action( 'admin_post_konx_migration_export_decision_csv', array( __CLASS__, 'handle_export_decision_csv' ) );
 		add_action( 'admin_post_konx_migration_dry_run', array( __CLASS__, 'handle_dry_run' ) );
 		add_action( 'admin_post_konx_migration_approve', array( __CLASS__, 'handle_approve' ) );
 		add_action( 'admin_post_konx_migration_export_audit_csv', array( __CLASS__, 'handle_export_audit_csv' ) );
@@ -130,6 +132,9 @@ class Konx_Migration_Wizard {
 						break;
 					case 'conflicts':
 						self::render_conflicts( $state );
+						break;
+					case 'decision-matrix':
+						self::render_decision_matrix( $state );
 						break;
 					case 'source-comparison':
 						self::render_comparison( $state );
@@ -635,7 +640,7 @@ class Konx_Migration_Wizard {
 
 		<?php
 		$can_continue = $vr && ( 0 === $vr['summary']['with_error'] || $vr['summary']['valid'] > 0 );
-		self::render_nav( 'conflicts', $can_continue ? 'source-comparison' : null );
+		self::render_nav( 'decision-matrix', $can_continue ? 'source-comparison' : null );
 	}
 
 	// ------------------------------------------------------------------
@@ -926,10 +931,410 @@ class Konx_Migration_Wizard {
 			</div>
 		<?php endif; ?>
 
-		<?php self::render_nav( 'sponsors', 'validation' ); ?>
+		<?php self::render_nav( 'sponsors', 'decision-matrix' ); ?>
 		<?php
 	}
 
+
+	// ------------------------------------------------------------------
+	// Migration Decision Matrix
+	// ------------------------------------------------------------------
+
+	/**
+	 * Build the migration decision for every CSV record.
+	 *
+	 * Combines CSV data, WP users, Coupon Affiliates, KonX affiliates,
+	 * and validation results into one decision per record.
+	 * Pure read-only — no database writes.
+	 *
+	 * @param array $state Migration state.
+	 * @return array { summary, decisions[] }.
+	 */
+	private static function build_decision_matrix( $state ) {
+		global $wpdb;
+
+		$engine  = self::build_engine_from_state();
+		$records = $engine->get_source_records();
+		if ( empty( $records ) ) {
+			return array( 'summary' => array(), 'decisions' => array() );
+		}
+
+		// Build validation error index.
+		$error_ids = array();
+		if ( ! empty( $state['validation_results']['issues'] ) ) {
+			foreach ( $state['validation_results']['issues'] as $issue ) {
+				if ( 'error' === $issue['severity'] ) {
+					$error_ids[ $issue['row'] ][] = $issue['message'];
+				}
+			}
+		}
+
+		// Build sponsor resolution index.
+		$resolutions = isset( $state['sponsor_resolutions'] ) ? $state['sponsor_resolutions'] : array();
+
+		// WP users by email.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wp_rows    = $wpdb->get_results( "SELECT ID, user_email FROM {$wpdb->users}" );
+		$wp_by_email = array();
+		foreach ( $wp_rows as $u ) {
+			$wp_by_email[ strtolower( $u->user_email ) ] = (int) $u->ID;
+		}
+
+		// Coupon Affiliates by WP user ID.
+		$ca_table  = $wpdb->prefix . 'wcusage_register';
+		$ca_exists = ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $ca_table ) ) === $ca_table );
+		$ca_by_user = array();
+		if ( $ca_exists ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$ca_rows = $wpdb->get_results( "SELECT userid, couponcode, status FROM {$ca_table}" );
+			foreach ( $ca_rows as $ca ) {
+				$ca_by_user[ (int) $ca->userid ] = $ca;
+			}
+		}
+
+		// KonX affiliates by email (via wp_user_id join).
+		$konx_table = $wpdb->prefix . 'konx_affiliates';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$konx_rows     = $wpdb->get_results( "SELECT a.id, a.referral_code, u.user_email FROM {$konx_table} a LEFT JOIN {$wpdb->users} u ON a.wp_user_id = u.ID" );
+		$konx_by_email = array();
+		foreach ( $konx_rows as $k ) {
+			if ( ! empty( $k->user_email ) ) {
+				$konx_by_email[ strtolower( $k->user_email ) ] = $k;
+			}
+		}
+
+		// Team name set for sponsor resolution.
+		$team_set = array();
+		foreach ( $records as $r ) {
+			$tn = strtolower( trim( $r->team_name ) );
+			if ( '' !== $tn ) {
+				$team_set[ $tn ] = true;
+			}
+		}
+
+		// Build decisions.
+		$decisions = array();
+		$summary   = array(
+			'total'       => count( $records ),
+			'create'      => 0,
+			'link_wp'     => 0,
+			'link_ca'     => 0,
+			'link_konx'   => 0,
+			'skip'        => 0,
+			'review'      => 0,
+			'invalid'     => 0,
+		);
+
+		$row_num = 0;
+		foreach ( $records as $r ) {
+			$row_num++;
+			$email   = strtolower( trim( $r->email ) );
+			$wp_id   = isset( $wp_by_email[ $email ] ) ? $wp_by_email[ $email ] : null;
+			$ca_rec  = ( $wp_id && isset( $ca_by_user[ $wp_id ] ) ) ? $ca_by_user[ $wp_id ] : null;
+			$konx    = isset( $konx_by_email[ $email ] ) ? $konx_by_email[ $email ] : null;
+
+			// Sponsor status.
+			$sponsor_tn = strtolower( trim( $r->referrer_team_name ) );
+			$sponsor_status = 'none';
+			if ( '' !== $sponsor_tn ) {
+				if ( isset( $team_set[ $sponsor_tn ] ) ) {
+					$sponsor_status = 'resolved';
+				} elseif ( isset( $resolutions[ $sponsor_tn ] ) ) {
+					$sponsor_status = 'manual_' . $resolutions[ $sponsor_tn ];
+				} else {
+					$sponsor_status = 'orphan';
+				}
+			}
+
+			// Validation status.
+			$val_status = 'valid';
+			$val_errors = array();
+			if ( isset( $error_ids[ $row_num ] ) ) {
+				$val_status = 'error';
+				$val_errors = $error_ids[ $row_num ];
+			}
+
+			// --- Decision logic ---
+			$decision = 'create';
+			$reasons  = array();
+
+			if ( 'error' === $val_status ) {
+				$decision = 'invalid';
+				$reasons  = $val_errors;
+			} elseif ( $konx ) {
+				$decision  = 'skip';
+				$reasons[] = sprintf( __( 'Already in KonX (affiliate #%d)', 'konx-affiliate-dashboard' ), $konx->id );
+			} elseif ( $ca_rec && $wp_id ) {
+				$decision  = 'link_ca';
+				$reasons[] = sprintf( __( 'Existing Coupon Affiliate (coupon: %s)', 'konx-affiliate-dashboard' ), $ca_rec->couponcode );
+			} elseif ( $wp_id ) {
+				$decision  = 'link_wp';
+				$reasons[] = sprintf( __( 'Existing WP user #%d', 'konx-affiliate-dashboard' ), $wp_id );
+			} else {
+				$decision  = 'create';
+				$reasons[] = __( 'New user and affiliate', 'konx-affiliate-dashboard' );
+			}
+
+			// Add sponsor context.
+			if ( 'orphan' === $sponsor_status && 'invalid' !== $decision ) {
+				$reasons[] = __( 'Sponsor unresolved (will be NULL)', 'konx-affiliate-dashboard' );
+			}
+
+			$summary[ $decision ]++;
+
+			$decisions[] = array(
+				'po10_id'        => $r->id,
+				'email'          => $r->email,
+				'team_name'      => $r->team_name,
+				'sponsor'        => $r->referrer_team_name,
+				'wp_user_id'     => $wp_id,
+				'ca_coupon'      => $ca_rec ? $ca_rec->couponcode : null,
+				'konx_id'        => $konx ? (int) $konx->id : null,
+				'val_status'     => $val_status,
+				'sponsor_status' => $sponsor_status,
+				'decision'       => $decision,
+				'reasons'        => $reasons,
+			);
+		}
+
+		return array(
+			'summary'   => $summary,
+			'decisions' => $decisions,
+		);
+	}
+
+	/**
+	 * Render the Decision Matrix step.
+	 *
+	 * @param array $state Migration state.
+	 */
+	private static function render_decision_matrix( $state ) {
+		if ( ! isset( $state['scan'] ) ) {
+			self::render_no_scan();
+			return;
+		}
+
+		$matrix = self::build_decision_matrix( $state );
+		$sm     = $matrix['summary'];
+
+		if ( empty( $sm ) ) {
+			echo '<div class="notice notice-warning inline"><p>' . esc_html__( 'No source records available.', 'konx-affiliate-dashboard' ) . '</p></div>';
+			self::render_nav( 'conflicts', null );
+			return;
+		}
+
+		// Store summary in state for audit report.
+		$s = get_option( 'konx_migration_state', array() );
+		$s['decision_matrix'] = array(
+			'summary'   => $sm,
+			'decisions' => $matrix['decisions'],
+		);
+		update_option( 'konx_migration_state', $s, false );
+
+		// Decision labels and badge types.
+		$labels = array(
+			'create'    => __( 'Create New', 'konx-affiliate-dashboard' ),
+			'link_wp'   => __( 'Link WP', 'konx-affiliate-dashboard' ),
+			'link_ca'   => __( 'Link CA', 'konx-affiliate-dashboard' ),
+			'link_konx' => __( 'Link KonX', 'konx-affiliate-dashboard' ),
+			'skip'      => __( 'Skip', 'konx-affiliate-dashboard' ),
+			'review'    => __( 'Review', 'konx-affiliate-dashboard' ),
+			'invalid'   => __( 'Invalid', 'konx-affiliate-dashboard' ),
+		);
+		$badge_types = array(
+			'create' => 'ok', 'link_wp' => 'ok', 'link_ca' => 'ok',
+			'link_konx' => 'warning', 'skip' => 'warning',
+			'review' => 'warning', 'invalid' => 'error',
+		);
+
+		?>
+		<h2><?php esc_html_e( 'Migration Decision Matrix', 'konx-affiliate-dashboard' ); ?></h2>
+		<p class="description"><?php esc_html_e( 'Every CSV record has been assigned a migration decision based on existing system data, validation results, and sponsor analysis. This is read-only — no data is modified.', 'konx-affiliate-dashboard' ); ?></p>
+
+		<!-- Summary Cards -->
+		<div class="konx-stats-grid" style="margin:16px 0;">
+			<?php self::stat_card( $sm['create'], __( 'Create New', 'konx-affiliate-dashboard' ), '#00a32a' ); ?>
+			<?php self::stat_card( $sm['link_wp'], __( 'Link WP User', 'konx-affiliate-dashboard' ), '#2271b1' ); ?>
+			<?php self::stat_card( $sm['link_ca'], __( 'Link Coupon Aff', 'konx-affiliate-dashboard' ), '#2271b1' ); ?>
+			<?php self::stat_card( $sm['link_konx'], __( 'Link KonX', 'konx-affiliate-dashboard' ), $sm['link_konx'] > 0 ? '#dba617' : '#00a32a' ); ?>
+			<?php self::stat_card( $sm['skip'], __( 'Skip', 'konx-affiliate-dashboard' ), $sm['skip'] > 0 ? '#dba617' : '#00a32a' ); ?>
+			<?php self::stat_card( $sm['review'], __( 'Manual Review', 'konx-affiliate-dashboard' ), $sm['review'] > 0 ? '#dba617' : '#00a32a' ); ?>
+			<?php self::stat_card( $sm['invalid'], __( 'Invalid', 'konx-affiliate-dashboard' ), $sm['invalid'] > 0 ? '#d63638' : '#00a32a' ); ?>
+		</div>
+
+		<!-- Totals check -->
+		<?php
+		$decision_total = $sm['create'] + $sm['link_wp'] + $sm['link_ca'] + $sm['link_konx'] + $sm['skip'] + $sm['review'] + $sm['invalid'];
+		if ( $decision_total === $sm['total'] ) : ?>
+			<div class="notice notice-success inline" style="margin:0 0 16px;">
+				<p><?php printf( esc_html__( 'All %s records have been assigned a decision. Matrix is complete.', 'konx-affiliate-dashboard' ), number_format( $sm['total'] ) ); ?></p>
+			</div>
+		<?php else : ?>
+			<div class="notice notice-error inline" style="margin:0 0 16px;">
+				<p><?php printf( esc_html__( 'Decision total (%d) does not match record total (%d).', 'konx-affiliate-dashboard' ), $decision_total, $sm['total'] ); ?></p>
+			</div>
+		<?php endif; ?>
+
+		<!-- Filter Tabs -->
+		<?php
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$filter = isset( $_GET['dm_filter'] ) ? sanitize_text_field( wp_unslash( $_GET['dm_filter'] ) ) : '';
+		$filter_opts = array(
+			''         => sprintf( __( 'All (%s)', 'konx-affiliate-dashboard' ), number_format( $sm['total'] ) ),
+			'create'   => sprintf( __( 'Create (%d)', 'konx-affiliate-dashboard' ), $sm['create'] ),
+			'link_wp'  => sprintf( __( 'Link WP (%d)', 'konx-affiliate-dashboard' ), $sm['link_wp'] ),
+			'link_ca'  => sprintf( __( 'Link CA (%d)', 'konx-affiliate-dashboard' ), $sm['link_ca'] ),
+			'invalid'  => sprintf( __( 'Invalid (%d)', 'konx-affiliate-dashboard' ), $sm['invalid'] ),
+		);
+		if ( $sm['skip'] > 0 ) {
+			$filter_opts['skip'] = sprintf( __( 'Skip (%d)', 'konx-affiliate-dashboard' ), $sm['skip'] );
+		}
+		?>
+		<div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap;">
+			<?php foreach ( $filter_opts as $fv => $fl ) :
+				$url = admin_url( 'admin.php?page=konx-migration&step=decision-matrix' . ( $fv ? '&dm_filter=' . $fv : '' ) );
+				$active = ( $filter === $fv );
+			?>
+				<a href="<?php echo esc_url( $url ); ?>" class="button <?php echo $active ? 'button-primary' : ''; ?>" style="font-size:12px;">
+					<?php echo esc_html( $fl ); ?>
+				</a>
+			<?php endforeach; ?>
+		</div>
+
+		<!-- Decision Table -->
+		<?php
+		$filtered = $matrix['decisions'];
+		if ( '' !== $filter ) {
+			$filtered = array_filter( $filtered, function ( $d ) use ( $filter ) {
+				return $d['decision'] === $filter;
+			} );
+		}
+		$showing = array_slice( $filtered, 0, 50 );
+		?>
+		<h3><?php esc_html_e( 'Decision Details', 'konx-affiliate-dashboard' ); ?>
+			<span class="description" style="font-weight:normal;margin-left:8px;">
+				<?php printf( esc_html__( 'Showing %1$d of %2$d', 'konx-affiliate-dashboard' ), count( $showing ), count( $filtered ) ); ?>
+			</span>
+		</h3>
+		<div class="konx-table-wrap">
+			<table class="widefat fixed striped" style="font-size:12px;margin-bottom:16px;">
+				<thead>
+					<tr>
+						<th style="width:55px;"><?php esc_html_e( 'ID', 'konx-affiliate-dashboard' ); ?></th>
+						<th><?php esc_html_e( 'Email', 'konx-affiliate-dashboard' ); ?></th>
+						<th style="width:90px;"><?php esc_html_e( 'Team', 'konx-affiliate-dashboard' ); ?></th>
+						<th style="width:70px;"><?php esc_html_e( 'WP', 'konx-affiliate-dashboard' ); ?></th>
+						<th style="width:70px;"><?php esc_html_e( 'CA', 'konx-affiliate-dashboard' ); ?></th>
+						<th style="width:55px;"><?php esc_html_e( 'KonX', 'konx-affiliate-dashboard' ); ?></th>
+						<th style="width:65px;"><?php esc_html_e( 'Valid', 'konx-affiliate-dashboard' ); ?></th>
+						<th style="width:75px;"><?php esc_html_e( 'Sponsor', 'konx-affiliate-dashboard' ); ?></th>
+						<th style="width:85px;"><?php esc_html_e( 'Decision', 'konx-affiliate-dashboard' ); ?></th>
+						<th><?php esc_html_e( 'Reason', 'konx-affiliate-dashboard' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ( $showing as $d ) :
+						$sp_labels = array(
+							'none'           => '—',
+							'resolved'       => __( 'OK', 'konx-affiliate-dashboard' ),
+							'orphan'         => __( 'Orphan', 'konx-affiliate-dashboard' ),
+							'manual_accept'  => __( 'Fixed', 'konx-affiliate-dashboard' ),
+							'manual_root'    => __( 'Root', 'konx-affiliate-dashboard' ),
+							'manual_ignore'  => __( 'Ignore', 'konx-affiliate-dashboard' ),
+						);
+						$sp_colors = array(
+							'none' => '#646970', 'resolved' => '#00a32a', 'orphan' => '#d63638',
+							'manual_accept' => '#00a32a', 'manual_root' => '#2271b1', 'manual_ignore' => '#646970',
+						);
+					?>
+						<tr<?php echo 'invalid' === $d['decision'] || 'skip' === $d['decision'] ? ' style="opacity:0.5;"' : ''; ?>>
+							<td><?php echo esc_html( $d['po10_id'] ); ?></td>
+							<td style="font-size:11px;"><?php echo esc_html( $d['email'] ); ?></td>
+							<td><code style="font-size:11px;"><?php echo esc_html( mb_substr( $d['team_name'], 0, 10 ) ); ?></code></td>
+							<td><?php echo $d['wp_user_id'] ? esc_html( '#' . $d['wp_user_id'] ) : '<span style="color:#646970;">—</span>'; ?></td>
+							<td><?php echo $d['ca_coupon'] ? '<code style="font-size:11px;">' . esc_html( mb_substr( $d['ca_coupon'], 0, 8 ) ) . '</code>' : '<span style="color:#646970;">—</span>'; ?></td>
+							<td><?php echo $d['konx_id'] ? esc_html( '#' . $d['konx_id'] ) : '<span style="color:#646970;">—</span>'; ?></td>
+							<td>
+								<?php if ( 'error' === $d['val_status'] ) : ?>
+									<?php echo wp_kses_post( self::badge( 'error', 'ERR' ) ); ?>
+								<?php else : ?>
+									<?php echo wp_kses_post( self::badge( 'ok', 'OK' ) ); ?>
+								<?php endif; ?>
+							</td>
+							<td>
+								<span style="color:<?php echo esc_attr( $sp_colors[ $d['sponsor_status'] ] ?? '#646970' ); ?>;font-size:11px;font-weight:600;">
+									<?php echo esc_html( $sp_labels[ $d['sponsor_status'] ] ?? $d['sponsor_status'] ); ?>
+								</span>
+							</td>
+							<td><?php echo wp_kses_post( self::badge( $badge_types[ $d['decision'] ] ?? 'ok', $labels[ $d['decision'] ] ?? $d['decision'] ) ); ?></td>
+							<td style="font-size:11px;color:#646970;"><?php echo esc_html( implode( '; ', $d['reasons'] ) ); ?></td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
+
+		<!-- Export -->
+		<div style="margin-bottom:16px;">
+			<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=konx_migration_export_decision_csv' ), 'konx_export_decision', 'konx_dec_nonce' ) ); ?>" class="button">
+				<span class="dashicons dashicons-media-spreadsheet" style="vertical-align:text-bottom;"></span>
+				<?php esc_html_e( 'Export Decision Matrix (CSV)', 'konx-affiliate-dashboard' ); ?>
+			</a>
+		</div>
+
+		<div class="notice notice-info inline" style="margin:0 0 16px;">
+			<p><?php esc_html_e( 'This matrix is read-only. No users, affiliates, or financial records have been created or modified.', 'konx-affiliate-dashboard' ); ?></p>
+		</div>
+
+		<?php self::render_nav( 'conflicts', 'validation' ); ?>
+		<?php
+	}
+
+	/**
+	 * Handle CSV export of the decision matrix.
+	 */
+	public static function handle_export_decision_csv() {
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
+		}
+		check_admin_referer( 'konx_export_decision', 'konx_dec_nonce' );
+
+		$state = get_option( 'konx_migration_state', array() );
+		if ( empty( $state['decision_matrix']['decisions'] ) ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=konx-migration&step=decision-matrix' ) );
+			exit;
+		}
+
+		$decisions = $state['decision_matrix']['decisions'];
+		$filename  = 'konx-decision-matrix-' . gmdate( 'Y-m-d-His' ) . '.csv';
+
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename=' . $filename );
+		header( 'Pragma: no-cache' );
+		header( 'Expires: 0' );
+
+		$output = fopen( 'php://output', 'w' );
+		fputcsv( $output, array( 'PO10_ID', 'Email', 'Team_Name', 'Sponsor', 'WP_User_ID', 'CA_Coupon', 'KonX_ID', 'Validation', 'Sponsor_Status', 'Decision', 'Reasons' ) );
+
+		foreach ( $decisions as $d ) {
+			fputcsv( $output, array(
+				$d['po10_id'],
+				$d['email'],
+				$d['team_name'],
+				$d['sponsor'],
+				$d['wp_user_id'] ?? '',
+				$d['ca_coupon'] ?? '',
+				$d['konx_id'] ?? '',
+				$d['val_status'],
+				$d['sponsor_status'],
+				$d['decision'],
+				implode( '; ', $d['reasons'] ),
+			) );
+		}
+
+		fclose( $output );
+		exit;
+	}
 
 	// ------------------------------------------------------------------
 	// Source Comparison
@@ -1692,6 +2097,24 @@ class Konx_Migration_Wizard {
 							<tr><td style="padding:4px 0;"><?php esc_html_e( 'Coupon Affiliate Matches', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;"><?php echo esc_html( $audit['comparison']['ca']['matched'] ); ?></td></tr>
 						<?php endif; ?>
 						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Total Issues Found', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;"><?php echo esc_html( $audit['comparison']['issue_count'] ); ?></td></tr>
+					</table>
+				</div>
+			<?php endif; ?>
+
+			<!-- Decision Matrix Summary -->
+			<?php if ( ! empty( $audit['decision_matrix'] ) ) : ?>
+				<?php $dm = $audit['decision_matrix']; ?>
+				<div class="konx-card">
+					<h2 style="display:flex;align-items:center;gap:8px;">
+						<span class="dashicons dashicons-editor-table" style="color:#2271b1;"></span>
+						<?php esc_html_e( 'Migration Decisions', 'konx-affiliate-dashboard' ); ?>
+					</h2>
+					<table style="width:100%;font-size:13px;">
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Create New', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;color:#00a32a;"><?php echo esc_html( number_format( $dm['create'] ) ); ?></td></tr>
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Link WP User', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;"><?php echo esc_html( number_format( $dm['link_wp'] ) ); ?></td></tr>
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Link Coupon Affiliate', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;"><?php echo esc_html( number_format( $dm['link_ca'] ) ); ?></td></tr>
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Skip / Link KonX', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;color:<?php echo ( $dm['skip'] + $dm['link_konx'] ) > 0 ? '#dba617' : '#00a32a'; ?>;"><?php echo esc_html( $dm['skip'] + $dm['link_konx'] ); ?></td></tr>
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Invalid', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;color:<?php echo $dm['invalid'] > 0 ? '#d63638' : '#00a32a'; ?>;"><?php echo esc_html( $dm['invalid'] ); ?></td></tr>
 					</table>
 				</div>
 			<?php endif; ?>

@@ -37,6 +37,8 @@ class Konx_Migration_Audit {
 		$field_map  = isset( $state['field_mappings'] ) ? $state['field_mappings'] : null;
 		$csv_info   = isset( $state['csv_info'] ) ? $state['csv_info'] : null;
 
+		$decision_matrix = isset( $state['decision_matrix']['summary'] ) ? $state['decision_matrix']['summary'] : null;
+
 		return array(
 			'generated_at' => current_time( 'mysql', true ),
 			'plugin_ver'   => KONX_AFFILIATE_VERSION,
@@ -49,6 +51,7 @@ class Konx_Migration_Audit {
 			'duplicates'   => $validation ? self::build_duplicate_report( $validation ) : null,
 			'comparison'   => $comparison ? self::build_comparison_summary( $comparison ) : null,
 			'sponsors'     => self::build_sponsor_report( $scan, $comparison ),
+			'decision_matrix' => $decision_matrix,
 			'readiness'    => $summary['readiness'],
 			'approved'     => ! empty( $state['approved'] ),
 			'approved_by'  => isset( $state['approved_by'] ) ? (int) $state['approved_by'] : null,
