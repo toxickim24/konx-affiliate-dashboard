@@ -64,7 +64,6 @@ class Konx_Migration_Wizard {
 	 * Register the submenu page.
 	 */
 	public static function register_menu() {
-		// Hidden from sidebar — accessed via Settings > Migration tab.
 		add_submenu_page(
 			null,
 			__( 'Migration Wizard', 'konx-affiliate-dashboard' ),
@@ -947,18 +946,8 @@ class Konx_Migration_Wizard {
 			return;
 		}
 
-		// Get source records from engine (DB source on develop).
-		$engine = new Konx_Migration_Engine();
-		$records = array();
-		if ( method_exists( $engine, 'get_source_records' ) ) {
-			$records = $engine->get_source_records();
-		} else {
-			global $wpdb;
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			$records = $wpdb->get_results(
-				"SELECT id, user_fname, user_lname, email, user_phone, promotional_title, team_name, referrer_team_name, source, country_code, created_at FROM `powerof10.biz`.users ORDER BY id"
-			);
-		}
+		$engine  = self::build_engine_from_state();
+		$records = $engine->get_source_records();
 
 		if ( empty( $records ) ) {
 			echo '<div class="notice notice-warning inline"><p>' . esc_html__( 'No source records available.', 'konx-affiliate-dashboard' ) . '</p></div>';
@@ -1877,18 +1866,8 @@ class Konx_Migration_Wizard {
 		}
 		check_admin_referer( 'konx_migration_run_validation', 'konx_val_nonce' );
 
-		$engine  = new Konx_Migration_Engine();
-
-		// Get source records — use engine method if available, else query DB directly.
-		if ( method_exists( $engine, 'get_source_records' ) ) {
-			$records = $engine->get_source_records();
-		} else {
-			global $wpdb;
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			$records = $wpdb->get_results(
-				"SELECT id, user_fname, user_lname, email, user_phone, promotional_title, team_name, referrer_team_name, source, country_code, created_at FROM `powerof10.biz`.users ORDER BY id"
-			);
-		}
+		$engine  = self::build_engine_from_state();
+		$records = $engine->get_source_records();
 
 		if ( empty( $records ) ) {
 			self::set_feedback( 'error', __( 'No source records available. Run a scan first.', 'konx-affiliate-dashboard' ) );
