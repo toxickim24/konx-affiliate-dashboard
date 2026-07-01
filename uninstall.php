@@ -13,10 +13,13 @@
  * DESTRUCTIVE behavior (requires explicit opt-in):
  *   - Only runs if KONX_REMOVE_ALL_DATA is defined as boolean true
  *     in wp-config.php: define( 'KONX_REMOVE_ALL_DATA', true );
- *   - Drops all 11 custom database tables
- *   - Deletes all plugin options
+ *   - Drops all 13 custom database tables
+ *   - Deletes all plugin options and migration state
+ *   - Deletes all transients with konx_ prefix
  *   - Deletes all user meta with konx_ prefix
  *   - Deletes all order meta with _konx_ prefix
+ *   - Removes plugin-created pages (Registration & Dashboard)
+ *   - Flushes rewrite rules
  *
  * @package KonxAffiliateDashboard
  */
@@ -33,7 +36,6 @@ global $wpdb;
 // -----------------------------------------------------------------------
 $roles = array(
 	'konx_business_affiliate',
-	'konx_referral_affiliate',
 	'konx_team_agent',
 	'konx_marketing_agent',
 	'konx_sales_agent',
@@ -81,17 +83,36 @@ $remove_via_setting  = (bool) get_option( 'konx_remove_all_data', false );
 
 if ( $remove_via_constant || $remove_via_setting ) {
 
+	// Delete plugin-created pages (before removing the options that store their IDs).
+	$page_options = array( 'konx_registration_page_id', 'konx_dashboard_page_id' );
+	foreach ( $page_options as $opt ) {
+		$page_id = (int) get_option( $opt, 0 );
+		if ( $page_id > 0 && get_post( $page_id ) ) {
+			wp_delete_post( $page_id, true );
+		}
+	}
+
 	// Delete plugin options.
-	delete_option( 'konx_affiliate_version' );
-	delete_option( 'konx_affiliate_db_version' );
-	delete_option( 'konx_ip_hash_salt' );
-	delete_option( 'konx_affiliate_settings' );
-	delete_option( 'konx_admin_fee_settings' );
-	delete_option( 'konx_referral_settings' );
-	delete_option( 'konx_recurring_commission_rate' );
-	delete_option( 'konx_registration_page_id' );
-	delete_option( 'konx_dashboard_page_id' );
-	delete_option( 'konx_remove_all_data' );
+	$options = array(
+		'konx_affiliate_version',
+		'konx_affiliate_db_version',
+		'konx_ip_hash_salt',
+		'konx_affiliate_settings',
+		'konx_admin_fee_settings',
+		'konx_referral_settings',
+		'konx_recurring_commission_rate',
+		'konx_registration_page_id',
+		'konx_dashboard_page_id',
+		'konx_remove_all_data',
+		'konx_migration_state',
+	);
+	foreach ( $options as $opt ) {
+		delete_option( $opt );
+	}
+
+	// Delete all transients with konx_ prefix (covers dynamic keys like konx_dash_feedback_*, konx_new_api_key_*).
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '\_transient\_konx\_%' OR option_name LIKE '\_transient\_timeout\_konx\_%'" );
 
 	// Drop custom tables.
 	$tables = array(
@@ -106,6 +127,8 @@ if ( $remove_via_constant || $remove_via_setting ) {
 		'konx_commission_rules',
 		'konx_product_map',
 		'konx_audit_log',
+		'konx_api_keys',
+		'konx_api_log',
 	);
 	foreach ( $tables as $table ) {
 		$full = $wpdb->prefix . $table;
@@ -123,4 +146,7 @@ if ( $remove_via_constant || $remove_via_setting ) {
 	if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $hpos_meta ) ) === $hpos_meta ) {
 		$wpdb->query( "DELETE FROM {$hpos_meta} WHERE meta_key LIKE '\_konx\_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	}
+
+	// Flush rewrite rules to remove the affiliate-dashboard endpoint.
+	flush_rewrite_rules();
 }
