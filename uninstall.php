@@ -13,7 +13,7 @@
  * DESTRUCTIVE behavior (requires explicit opt-in):
  *   - Only runs if KONX_REMOVE_ALL_DATA is defined as boolean true
  *     in wp-config.php: define( 'KONX_REMOVE_ALL_DATA', true );
- *   - Drops all 13 custom database tables
+ *   - Drops all 15 custom database tables
  *   - Deletes all plugin options and migration state
  *   - Deletes all transients with konx_ prefix
  *   - Deletes all user meta with konx_ prefix
@@ -129,6 +129,8 @@ if ( $remove_via_constant || $remove_via_setting ) {
 		'konx_audit_log',
 		'konx_api_keys',
 		'konx_api_log',
+		'konx_migration_sessions',
+		'konx_migration_log',
 	);
 	foreach ( $tables as $table ) {
 		$full = $wpdb->prefix . $table;
