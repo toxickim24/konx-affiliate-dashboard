@@ -44,6 +44,7 @@ class Konx_Migration_Wizard {
 		'preview'            => 'Preview',
 		'dry-run'            => 'Dry Run',
 		'approval'           => 'Approval',
+		'execution'          => 'Execution',
 		'audit'              => 'Audit Report',
 	);
 
@@ -165,6 +166,9 @@ class Konx_Migration_Wizard {
 						break;
 					case 'approval':
 						self::render_approval( $state );
+						break;
+					case 'execution':
+						self::render_execution( $state );
 						break;
 					case 'audit':
 						self::render_audit( $state );
@@ -3533,6 +3537,406 @@ class Konx_Migration_Wizard {
 		self::set_feedback( 'success', __( 'Migration plan approved. The execution phase can now proceed.', 'konx-affiliate-dashboard' ) );
 		wp_safe_redirect( admin_url( 'admin.php?page=konx-migration&step=approval' ) );
 		exit;
+	}
+
+	// ------------------------------------------------------------------
+	// Step: Execution
+	// ------------------------------------------------------------------
+
+	/**
+	 * Render the Execution step.
+	 *
+	 * Provides UI for preflight, backup, verification, batch
+	 * execution, and rollback — all powered by AJAX endpoints
+	 * built in Phases 27B–27F.
+	 *
+	 * @param array $state Migration state.
+	 */
+	private static function render_execution( $state ) {
+		$approved    = ! empty( $state['approved'] );
+		$preflight   = isset( $state['preflight'] ) ? $state['preflight'] : null;
+		$backup      = isset( $state['backup'] ) ? $state['backup'] : null;
+		$verification = isset( $state['execution_verification'] ) ? $state['execution_verification'] : null;
+		$nonce       = wp_create_nonce( 'konx_migration_nonce' );
+
+		if ( ! $approved ) {
+			echo '<div class="notice notice-error inline"><p>';
+			esc_html_e( 'Migration has not been approved. Complete the Approval step first.', 'konx-affiliate-dashboard' );
+			echo '</p></div>';
+			self::render_nav( 'approval', null );
+			return;
+		}
+		?>
+
+		<div class="notice notice-warning inline" style="margin-bottom:16px;border-left-color:#d63638;">
+			<p><strong><?php esc_html_e( 'WARNING: This step creates WordPress users and KonX affiliate profiles.', 'konx-affiliate-dashboard' ); ?></strong></p>
+			<p><?php esc_html_e( 'All operations are logged and can be rolled back, but please ensure you have reviewed all previous steps carefully.', 'konx-affiliate-dashboard' ); ?></p>
+		</div>
+
+		<!-- Gate Status Panel -->
+		<div class="konx-card" style="margin-bottom:20px;">
+			<h2 style="margin-top:0;"><?php esc_html_e( 'Execution Readiness', 'konx-affiliate-dashboard' ); ?></h2>
+
+			<table class="widefat striped" style="max-width:700px;">
+				<thead><tr><th><?php esc_html_e( 'Gate', 'konx-affiliate-dashboard' ); ?></th><th><?php esc_html_e( 'Status', 'konx-affiliate-dashboard' ); ?></th><th><?php esc_html_e( 'Action', 'konx-affiliate-dashboard' ); ?></th></tr></thead>
+				<tbody>
+					<tr>
+						<td><?php esc_html_e( 'Approval', 'konx-affiliate-dashboard' ); ?></td>
+						<td id="gate-approval"><?php echo $approved ? self::badge( 'ok', 'Approved' ) : self::badge( 'error', 'Pending' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></td>
+						<td><a href="<?php echo esc_url( admin_url( 'admin.php?page=konx-migration&step=approval' ) ); ?>" class="button button-small"><?php esc_html_e( 'View', 'konx-affiliate-dashboard' ); ?></a></td>
+					</tr>
+					<tr>
+						<td><?php esc_html_e( 'Preflight Checks', 'konx-affiliate-dashboard' ); ?></td>
+						<td id="gate-preflight"><?php
+						if ( $preflight && $preflight['passed'] ) {
+							echo self::badge( 'ok', 'Passed' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+						} elseif ( $preflight ) {
+							echo self::badge( 'error', $preflight['summary']['fail'] . ' failed' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+						} else {
+							echo self::badge( 'warning', 'Not run' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+						}
+						?></td>
+						<td><button type="button" class="button button-small" id="btn-preflight"><?php esc_html_e( 'Run Preflight', 'konx-affiliate-dashboard' ); ?></button></td>
+					</tr>
+					<tr>
+						<td><?php esc_html_e( 'Backup', 'konx-affiliate-dashboard' ); ?></td>
+						<td id="gate-backup"><?php
+						if ( $backup && $backup['verified'] ) {
+							echo self::badge( 'ok', $backup['total_files'] . ' files, ' . $backup['total_size'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+						} elseif ( $backup ) {
+							echo self::badge( 'warning', 'Unverified' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+						} else {
+							echo self::badge( 'warning', 'Not created' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+						}
+						?></td>
+						<td>
+							<button type="button" class="button button-small" id="btn-backup"><?php esc_html_e( 'Create Backup', 'konx-affiliate-dashboard' ); ?></button>
+							<button type="button" class="button button-small" id="btn-verify-backup" <?php echo $backup ? '' : 'disabled'; ?>><?php esc_html_e( 'Verify', 'konx-affiliate-dashboard' ); ?></button>
+						</td>
+					</tr>
+					<tr>
+						<td><?php esc_html_e( 'Execution Verification', 'konx-affiliate-dashboard' ); ?></td>
+						<td id="gate-verification"><?php
+						if ( $verification && $verification['can_execute'] ) {
+							$vs = $verification['summary'];
+							echo self::badge( 'ok', $vs['ready'] . ' ready' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+						} elseif ( $verification ) {
+							$vs = $verification['summary'];
+							echo self::badge( 'error', $vs['blocked'] . ' blocked' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+						} else {
+							echo self::badge( 'warning', 'Not run' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+						}
+						?></td>
+						<td><button type="button" class="button button-small" id="btn-verify-exec"><?php esc_html_e( 'Verify Execution', 'konx-affiliate-dashboard' ); ?></button></td>
+					</tr>
+				</tbody>
+			</table>
+
+			<div id="gate-details" style="margin-top:12px;"></div>
+		</div>
+
+		<!-- Execution Panel -->
+		<div class="konx-card" style="margin-bottom:20px;">
+			<h2 style="margin-top:0;"><?php esc_html_e( 'Migration Execution', 'konx-affiliate-dashboard' ); ?></h2>
+
+			<div id="exec-status" style="margin-bottom:12px;">
+				<p><?php esc_html_e( 'Complete all gates above before starting migration.', 'konx-affiliate-dashboard' ); ?></p>
+			</div>
+
+			<!-- Progress bar -->
+			<div id="exec-progress-wrap" style="display:none;margin-bottom:16px;">
+				<div style="background:#e0e0e0;border-radius:4px;height:24px;overflow:hidden;position:relative;">
+					<div id="exec-progress-bar" style="background:#00a32a;height:100%;width:0%;transition:width 0.3s;border-radius:4px;"></div>
+					<span id="exec-progress-text" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:12px;font-weight:600;color:#1d2327;">0%</span>
+				</div>
+				<div style="display:flex;gap:20px;margin-top:8px;">
+					<div class="konx-stat-card"><span class="konx-stat-value" id="stat-processed" style="color:#2271b1;">0</span><span class="konx-stat-label"><?php esc_html_e( 'Processed', 'konx-affiliate-dashboard' ); ?></span></div>
+					<div class="konx-stat-card"><span class="konx-stat-value" id="stat-succeeded" style="color:#00a32a;">0</span><span class="konx-stat-label"><?php esc_html_e( 'Succeeded', 'konx-affiliate-dashboard' ); ?></span></div>
+					<div class="konx-stat-card"><span class="konx-stat-value" id="stat-failed" style="color:#d63638;">0</span><span class="konx-stat-label"><?php esc_html_e( 'Failed', 'konx-affiliate-dashboard' ); ?></span></div>
+					<div class="konx-stat-card"><span class="konx-stat-value" id="stat-skipped" style="color:#946800;">0</span><span class="konx-stat-label"><?php esc_html_e( 'Skipped', 'konx-affiliate-dashboard' ); ?></span></div>
+					<div class="konx-stat-card"><span class="konx-stat-value" id="stat-batch" style="color:#2271b1;">-</span><span class="konx-stat-label"><?php esc_html_e( 'Batch', 'konx-affiliate-dashboard' ); ?></span></div>
+				</div>
+			</div>
+
+			<div id="exec-log" style="display:none;max-height:300px;overflow-y:auto;background:#f6f7f7;border:1px solid #ddd;padding:8px;font-family:monospace;font-size:12px;margin-bottom:12px;"></div>
+
+			<div style="display:flex;gap:8px;">
+				<button type="button" class="button button-primary button-hero" id="btn-start-migration" disabled>
+					<?php esc_html_e( 'Start Migration', 'konx-affiliate-dashboard' ); ?>
+				</button>
+			</div>
+		</div>
+
+		<!-- Rollback Panel -->
+		<div class="konx-card" style="margin-bottom:20px;">
+			<h2 style="margin-top:0;"><?php esc_html_e( 'Rollback', 'konx-affiliate-dashboard' ); ?></h2>
+			<p><?php esc_html_e( 'If migration has completed, you can preview and execute a rollback to undo all changes.', 'konx-affiliate-dashboard' ); ?></p>
+
+			<div id="rollback-details" style="margin-bottom:12px;"></div>
+
+			<div style="display:flex;gap:8px;">
+				<button type="button" class="button button-small" id="btn-rollback-preview"><?php esc_html_e( 'Preview Rollback', 'konx-affiliate-dashboard' ); ?></button>
+				<button type="button" class="button button-small" id="btn-rollback-execute" disabled style="color:#d63638;border-color:#d63638;"><?php esc_html_e( 'Execute Rollback', 'konx-affiliate-dashboard' ); ?></button>
+			</div>
+		</div>
+
+		<?php self::render_nav( 'approval', 'audit' ); ?>
+
+		<!-- Confirmation Modal -->
+		<div id="konx-confirm-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:100000;align-items:center;justify-content:center;">
+			<div style="background:#fff;border-radius:8px;padding:24px;max-width:500px;width:90%;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+				<h3 id="modal-title" style="margin-top:0;color:#d63638;"></h3>
+				<p id="modal-message"></p>
+				<p><label><input type="checkbox" id="modal-confirm-check"> <strong id="modal-confirm-label"></strong></label></p>
+				<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+					<button type="button" class="button" id="modal-cancel"><?php esc_html_e( 'Cancel', 'konx-affiliate-dashboard' ); ?></button>
+					<button type="button" class="button button-primary" id="modal-proceed" disabled style="background:#d63638;border-color:#d63638;"><?php esc_html_e( 'Proceed', 'konx-affiliate-dashboard' ); ?></button>
+				</div>
+			</div>
+		</div>
+
+		<script>
+		(function($) {
+			var nonce = <?php echo wp_json_encode( $nonce ); ?>;
+			var ajaxurl = <?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
+			var migrationRunning = false;
+			var totalProcessed = 0, totalSucceeded = 0, totalFailed = 0, totalSkipped = 0;
+
+			function badge(status, label) {
+				var colors = {ok:['#edfaef','#00a32a'],warning:['#fcf6e3','#946800'],error:['#fcf0f1','#d63638']};
+				var c = colors[status] || colors.warning;
+				return '<span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;background:'+c[0]+';color:'+c[1]+';">'+label+'</span>';
+			}
+
+			function log(msg) {
+				var el = $('#exec-log');
+				el.show();
+				el.append(new Date().toLocaleTimeString() + ' ' + msg + '\n');
+				el.scrollTop(el[0].scrollHeight);
+			}
+
+			function checkGates() {
+				var pf = $('#gate-preflight').find('span').css('color') === 'rgb(0, 163, 42)';
+				var bk = $('#gate-backup').find('span').css('color') === 'rgb(0, 163, 42)';
+				var vr = $('#gate-verification').find('span').css('color') === 'rgb(0, 163, 42)';
+				var ap = true; // Already checked on page load.
+				$('#btn-start-migration').prop('disabled', !(pf && bk && vr && ap && !migrationRunning));
+			}
+
+			// Preflight
+			$('#btn-preflight').on('click', function() {
+				var btn = $(this).prop('disabled', true).text('<?php echo esc_js( __( 'Running...', 'konx-affiliate-dashboard' ) ); ?>');
+				$.post(ajaxurl, {action:'konx_migration_preflight', nonce:nonce}, function(r) {
+					btn.prop('disabled', false).text('<?php echo esc_js( __( 'Run Preflight', 'konx-affiliate-dashboard' ) ); ?>');
+					if (r.success) {
+						var d = r.data;
+						if (d.passed) {
+							$('#gate-preflight').html(badge('ok', 'Passed (' + d.pass + '/' + d.total + ')'));
+						} else {
+							$('#gate-preflight').html(badge('error', d.fail + ' failed'));
+						}
+						var html = '<table class="widefat striped"><thead><tr><th><?php echo esc_js( __( 'Check', 'konx-affiliate-dashboard' ) ); ?></th><th><?php echo esc_js( __( 'Status', 'konx-affiliate-dashboard' ) ); ?></th><th><?php echo esc_js( __( 'Details', 'konx-affiliate-dashboard' ) ); ?></th></tr></thead><tbody>';
+						d.checks.forEach(function(c) {
+							var s = c.status === 'pass' ? 'ok' : (c.status === 'warn' ? 'warning' : 'error');
+							html += '<tr><td>' + c.label + '</td><td>' + badge(s, c.status.toUpperCase()) + '</td><td>' + c.message + '</td></tr>';
+						});
+						html += '</tbody></table>';
+						$('#gate-details').html(html);
+						checkGates();
+					} else {
+						$('#gate-preflight').html(badge('error', r.data.message));
+					}
+				});
+			});
+
+			// Backup
+			$('#btn-backup').on('click', function() {
+				var btn = $(this).prop('disabled', true).text('<?php echo esc_js( __( 'Creating...', 'konx-affiliate-dashboard' ) ); ?>');
+				$.post(ajaxurl, {action:'konx_migration_create_backup', nonce:nonce}, function(r) {
+					btn.prop('disabled', false).text('<?php echo esc_js( __( 'Create Backup', 'konx-affiliate-dashboard' ) ); ?>');
+					if (r.success) {
+						var s = r.data.summary;
+						$('#gate-backup').html(badge('ok', s.files_ok + ' files, ' + s.total_size_fmt));
+						$('#btn-verify-backup').prop('disabled', false);
+						checkGates();
+					} else {
+						$('#gate-backup').html(badge('error', r.data.message));
+					}
+				});
+			});
+
+			// Verify Backup
+			$('#btn-verify-backup').on('click', function() {
+				var btn = $(this).prop('disabled', true).text('<?php echo esc_js( __( 'Verifying...', 'konx-affiliate-dashboard' ) ); ?>');
+				$.post(ajaxurl, {action:'konx_migration_verify_backup', nonce:nonce}, function(r) {
+					btn.prop('disabled', false).text('<?php echo esc_js( __( 'Verify', 'konx-affiliate-dashboard' ) ); ?>');
+					if (r.success && r.data.summary.verified) {
+						$('#gate-backup').html(badge('ok', r.data.summary.files_ok + ' files verified'));
+					} else {
+						$('#gate-backup').html(badge('error', 'Verification failed'));
+					}
+					checkGates();
+				});
+			});
+
+			// Verify Execution
+			$('#btn-verify-exec').on('click', function() {
+				var btn = $(this).prop('disabled', true).text('<?php echo esc_js( __( 'Verifying...', 'konx-affiliate-dashboard' ) ); ?>');
+				$.post(ajaxurl, {action:'konx_migration_verify_execution', nonce:nonce, populate_log:1}, function(r) {
+					btn.prop('disabled', false).text('<?php echo esc_js( __( 'Verify Execution', 'konx-affiliate-dashboard' ) ); ?>');
+					if (r.success) {
+						var d = r.data;
+						if (d.can_execute) {
+							$('#gate-verification').html(badge('ok', d.summary.ready + ' ready'));
+						} else {
+							$('#gate-verification').html(badge('error', d.summary.blocked + ' blocked'));
+						}
+						checkGates();
+					} else {
+						$('#gate-verification').html(badge('error', r.data.message));
+					}
+				});
+			});
+
+			// Start Migration (with confirmation modal)
+			$('#btn-start-migration').on('click', function() {
+				showModal(
+					'<?php echo esc_js( __( 'Start Migration?', 'konx-affiliate-dashboard' ) ); ?>',
+					'<?php echo esc_js( __( 'This will create WordPress users and KonX affiliate profiles. This action is logged and can be rolled back.', 'konx-affiliate-dashboard' ) ); ?>',
+					'<?php echo esc_js( __( 'I understand this creates real user accounts', 'konx-affiliate-dashboard' ) ); ?>',
+					function() { startMigration(); }
+				);
+			});
+
+			function startMigration() {
+				migrationRunning = true;
+				$('#btn-start-migration').prop('disabled', true).text('<?php echo esc_js( __( 'Running...', 'konx-affiliate-dashboard' ) ); ?>');
+				$('#exec-progress-wrap').show();
+				$('#exec-status').html('<p><strong><?php echo esc_js( __( 'Migration in progress...', 'konx-affiliate-dashboard' ) ); ?></strong></p>');
+				totalProcessed = 0; totalSucceeded = 0; totalFailed = 0; totalSkipped = 0;
+				log('Migration started.');
+				executeBatch(1);
+			}
+
+			function executeBatch(batchNum) {
+				$.post(ajaxurl, {action:'konx_migration_execute_batch', nonce:nonce, batch_number:batchNum, batch_size:50}, function(r) {
+					if (r.success) {
+						var d = r.data;
+						totalProcessed += d.processed;
+						totalSucceeded += d.succeeded;
+						totalFailed += d.failed;
+						totalSkipped += d.skipped;
+
+						$('#stat-processed').text(totalProcessed);
+						$('#stat-succeeded').text(totalSucceeded);
+						$('#stat-failed').text(totalFailed);
+						$('#stat-skipped').text(totalSkipped);
+						$('#stat-batch').text(d.batch_number + '/' + d.total_batches);
+
+						var pct = d.total_batches > 0 ? Math.round((d.batch_number / d.total_batches) * 100) : 100;
+						$('#exec-progress-bar').css('width', pct + '%');
+						$('#exec-progress-text').text(pct + '%');
+
+						log('Batch ' + d.batch_number + '/' + d.total_batches + ': ' + d.succeeded + ' ok, ' + d.failed + ' fail, ' + d.skipped + ' skip' + (d.rolled_back ? ' [ROLLED BACK]' : ''));
+
+						if (d.is_last || d.status === 'complete') {
+							migrationRunning = false;
+							$('#exec-progress-bar').css('background', totalFailed > 0 ? '#d63638' : '#00a32a');
+							$('#exec-status').html('<p><strong>' + (totalFailed > 0 ? '<?php echo esc_js( __( 'Migration completed with errors.', 'konx-affiliate-dashboard' ) ); ?>' : '<?php echo esc_js( __( 'Migration completed successfully!', 'konx-affiliate-dashboard' ) ); ?>') + '</strong></p>');
+							$('#btn-start-migration').text('<?php echo esc_js( __( 'Completed', 'konx-affiliate-dashboard' ) ); ?>');
+							$('#btn-rollback-preview').prop('disabled', false);
+							log('Migration finished. Total: ' + totalProcessed + ' processed, ' + totalSucceeded + ' succeeded, ' + totalFailed + ' failed.');
+						} else {
+							executeBatch(d.batch_number + 1);
+						}
+					} else {
+						migrationRunning = false;
+						log('ERROR: ' + r.data.message);
+						$('#exec-status').html('<p style="color:#d63638;"><strong>' + r.data.message + '</strong></p>');
+						$('#btn-start-migration').prop('disabled', false).text('<?php echo esc_js( __( 'Retry Migration', 'konx-affiliate-dashboard' ) ); ?>');
+					}
+				}).fail(function() {
+					migrationRunning = false;
+					log('ERROR: Network error.');
+					$('#btn-start-migration').prop('disabled', false).text('<?php echo esc_js( __( 'Retry Migration', 'konx-affiliate-dashboard' ) ); ?>');
+				});
+			}
+
+			// Rollback Preview
+			$('#btn-rollback-preview').on('click', function() {
+				var btn = $(this).prop('disabled', true).text('<?php echo esc_js( __( 'Loading...', 'konx-affiliate-dashboard' ) ); ?>');
+				$.post(ajaxurl, {action:'konx_migration_rollback_preview', nonce:nonce}, function(r) {
+					btn.prop('disabled', false).text('<?php echo esc_js( __( 'Preview Rollback', 'konx-affiliate-dashboard' ) ); ?>');
+					if (r.success) {
+						var d = r.data;
+						var html = '<table class="widefat striped" style="max-width:500px;"><tbody>';
+						html += '<tr><td><?php echo esc_js( __( 'Affiliates to delete', 'konx-affiliate-dashboard' ) ); ?></td><td><strong>' + d.affiliates_to_delete + '</strong></td></tr>';
+						html += '<tr><td><?php echo esc_js( __( 'Users to delete', 'konx-affiliate-dashboard' ) ); ?></td><td><strong>' + d.users_to_delete + '</strong></td></tr>';
+						html += '<tr><td><?php echo esc_js( __( 'Users to clean (preserved)', 'konx-affiliate-dashboard' ) ); ?></td><td><strong>' + d.users_to_clean + '</strong></td></tr>';
+						html += '<tr><td><?php echo esc_js( __( 'Entries to skip', 'konx-affiliate-dashboard' ) ); ?></td><td><strong>' + d.entries_to_skip + '</strong></td></tr>';
+						html += '</tbody></table>';
+						$('#rollback-details').html(html);
+						$('#btn-rollback-execute').prop('disabled', false);
+					} else {
+						$('#rollback-details').html('<p style="color:#d63638;">' + r.data.message + '</p>');
+					}
+				});
+			});
+
+			// Rollback Execute (with confirmation modal)
+			$('#btn-rollback-execute').on('click', function() {
+				showModal(
+					'<?php echo esc_js( __( 'Execute Rollback?', 'konx-affiliate-dashboard' ) ); ?>',
+					'<?php echo esc_js( __( 'This will delete all affiliates and users created by the migration. Linked users will be preserved but their KonX profiles will be removed.', 'konx-affiliate-dashboard' ) ); ?>',
+					'<?php echo esc_js( __( 'I understand this deletes migration-created records', 'konx-affiliate-dashboard' ) ); ?>',
+					function() {
+						$('#btn-rollback-execute').prop('disabled', true).text('<?php echo esc_js( __( 'Rolling back...', 'konx-affiliate-dashboard' ) ); ?>');
+						$.post(ajaxurl, {action:'konx_migration_rollback_execute', nonce:nonce}, function(r) {
+							if (r.success) {
+								var d = r.data;
+								$('#rollback-details').html(
+									'<div class="notice notice-success inline"><p><strong><?php echo esc_js( __( 'Rollback complete.', 'konx-affiliate-dashboard' ) ); ?></strong> ' +
+									d.affiliates_deleted + ' <?php echo esc_js( __( 'affiliates deleted', 'konx-affiliate-dashboard' ) ); ?>, ' +
+									d.users_deleted + ' <?php echo esc_js( __( 'users deleted', 'konx-affiliate-dashboard' ) ); ?>, ' +
+									d.users_cleaned + ' <?php echo esc_js( __( 'users cleaned', 'konx-affiliate-dashboard' ) ); ?>.' +
+									(d.errors > 0 ? ' <span style="color:#d63638;">' + d.errors + ' <?php echo esc_js( __( 'errors', 'konx-affiliate-dashboard' ) ); ?></span>' : '') +
+									'</p></div>'
+								);
+								$('#btn-rollback-execute').text('<?php echo esc_js( __( 'Rolled Back', 'konx-affiliate-dashboard' ) ); ?>');
+							} else {
+								$('#rollback-details').html('<p style="color:#d63638;">' + r.data.message + '</p>');
+								$('#btn-rollback-execute').prop('disabled', false).text('<?php echo esc_js( __( 'Execute Rollback', 'konx-affiliate-dashboard' ) ); ?>');
+							}
+						});
+					}
+				);
+			});
+
+			// Modal helpers
+			function showModal(title, message, confirmLabel, onProceed) {
+				$('#modal-title').text(title);
+				$('#modal-message').text(message);
+				$('#modal-confirm-label').text(confirmLabel);
+				$('#modal-confirm-check').prop('checked', false);
+				$('#modal-proceed').prop('disabled', true);
+				$('#konx-confirm-modal').css('display', 'flex');
+
+				$('#modal-confirm-check').off('change').on('change', function() {
+					$('#modal-proceed').prop('disabled', !this.checked);
+				});
+				$('#modal-cancel').off('click').on('click', function() {
+					$('#konx-confirm-modal').hide();
+				});
+				$('#modal-proceed').off('click').on('click', function() {
+					$('#konx-confirm-modal').hide();
+					onProceed();
+				});
+			}
+
+			checkGates();
+		})(jQuery);
+		</script>
+		<?php
 	}
 
 	// ------------------------------------------------------------------
