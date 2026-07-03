@@ -3,7 +3,7 @@
  * Plugin Name:       KonX Affiliate Dashboard
  * Plugin URI:        https://github.com/toxickim24/konx-affiliate-dashboard
  * Description:       A custom affiliate dashboard for WooCommerce.
- * Version:           1.13.0
+ * Version:           1.14.0
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            toxickim24
@@ -26,8 +26,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-define( 'KONX_AFFILIATE_VERSION', '1.13.0' );
-define( 'KONX_AFFILIATE_DB_VERSION', '1.1.0' );
+define( 'KONX_AFFILIATE_VERSION', '1.14.0' );
+define( 'KONX_AFFILIATE_DB_VERSION', '1.2.0' );
 define( 'KONX_AFFILIATE_PLUGIN_FILE', __FILE__ );
 define( 'KONX_AFFILIATE_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'KONX_AFFILIATE_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -232,6 +232,9 @@ function konx_affiliate_init() {
 		// Hidden pages (accessible via direct URL for backward compatibility).
 		Konx_Migration_Wizard::init();
 		Konx_System_Status::init();
+
+		// Migration execution framework (preview only, no writes).
+		Konx_Batch_Processor::init();
 
 		// Utilities (no menu, handlers only).
 		Konx_Export_Manager::init();
