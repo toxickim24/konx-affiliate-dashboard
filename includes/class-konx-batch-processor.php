@@ -35,6 +35,7 @@ class Konx_Batch_Processor {
 		add_action( 'wp_ajax_konx_migration_verify_backup', array( __CLASS__, 'ajax_verify_backup' ) );
 		add_action( 'wp_ajax_konx_migration_verify_execution', array( __CLASS__, 'ajax_verify_execution' ) );
 		add_action( 'wp_ajax_konx_migration_execution_readiness', array( __CLASS__, 'ajax_execution_readiness' ) );
+		add_action( 'wp_ajax_konx_migration_execute_batch', array( __CLASS__, 'ajax_execute_batch' ) );
 	}
 
 	// ------------------------------------------------------------------
@@ -569,6 +570,142 @@ class Konx_Batch_Processor {
 				'approved_by' => $approved_by,
 				'approved_at' => $approved_at,
 			),
+		) );
+	}
+
+	// ------------------------------------------------------------------
+	// AJAX: Execute Batch
+	// ------------------------------------------------------------------
+
+	/**
+	 * AJAX handler: execute a single migration batch.
+	 *
+	 * Validates all safety gates, acquires the migration lock,
+	 * and processes one batch of records. Returns progress.
+	 *
+	 * THIS IS THE ONLY ENDPOINT THAT CREATES USERS/AFFILIATES.
+	 */
+	public static function ajax_execute_batch() {
+		check_ajax_referer( 'konx_migration_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'konx-affiliate-dashboard' ) ), 403 );
+		}
+
+		$state = get_option( 'konx_migration_state', array() );
+
+		// Validate all safety gates.
+		$gates = Konx_Migration_Executor::validate_gates( $state );
+		if ( is_wp_error( $gates ) ) {
+			wp_send_json_error( array(
+				'message' => $gates->get_error_message(),
+				'code'    => $gates->get_error_code(),
+			), 403 );
+		}
+
+		$batch_number = isset( $_POST['batch_number'] ) ? absint( $_POST['batch_number'] ) : 1;
+		$batch_size   = isset( $_POST['batch_size'] ) ? absint( $_POST['batch_size'] ) : 50;
+		$batch_size   = max( 10, min( 200, $batch_size ) );
+
+		$decisions = self::get_decisions_from_state( $state );
+		if ( empty( $decisions ) ) {
+			wp_send_json_error( array( 'message' => __( 'No decisions available.', 'konx-affiliate-dashboard' ) ), 400 );
+		}
+
+		// Build execution plan.
+		$plan = Konx_Execution_Planner::build( $decisions, $batch_size );
+
+		// Filter to actionable items only, sorted by execution order.
+		$actionable = array();
+		foreach ( $plan['items'] as $item ) {
+			if ( ! in_array( $item['planned_action'], array( 'skip', 'invalid' ), true ) ) {
+				$actionable[] = $item;
+			}
+		}
+		usort( $actionable, function ( $a, $b ) {
+			return $a['execution_order'] - $b['execution_order'];
+		} );
+
+		$total_batches = (int) ceil( count( $actionable ) / $batch_size );
+		$offset        = ( $batch_number - 1 ) * $batch_size;
+		$batch_items   = array_slice( $actionable, $offset, $batch_size );
+
+		if ( empty( $batch_items ) ) {
+			wp_send_json_success( array(
+				'batch_number'  => $batch_number,
+				'total_batches' => $total_batches,
+				'status'        => 'complete',
+				'message'       => __( 'All batches processed.', 'konx-affiliate-dashboard' ),
+			) );
+			return;
+		}
+
+		// Get or create session.
+		$session_id = isset( $state['execution_plan']['session_id'] )
+			? $state['execution_plan']['session_id']
+			: null;
+
+		if ( ! $session_id ) {
+			$csv_info = isset( $state['csv_info'] ) ? $state['csv_info'] : array();
+			$session  = Konx_Migration_Session::create( array(
+				'csv_filename'  => isset( $csv_info['filename'] ) ? $csv_info['filename'] : 'migration.csv',
+				'csv_hash'      => isset( $csv_info['hash'] ) ? $csv_info['hash'] : '',
+				'total_records' => count( $decisions ),
+				'initiated_by'  => get_current_user_id(),
+			) );
+			$session_id = is_wp_error( $session ) ? 'exec_' . gmdate( 'Ymd_His' ) : $session['session_id'];
+		}
+
+		// Acquire lock on first batch.
+		if ( 1 === $batch_number ) {
+			if ( ! Konx_Migration_Executor::acquire_lock( $session_id ) ) {
+				wp_send_json_error( array( 'message' => __( 'Could not acquire migration lock.', 'konx-affiliate-dashboard' ) ), 409 );
+			}
+
+			// Update session status.
+			Konx_Migration_Session::update_status( $session_id, 'executing' );
+		}
+
+		// Execute the batch.
+		$batch_result = Konx_Migration_Executor::execute_batch( $session_id, $batch_items, $state );
+
+		// Update session progress.
+		$session = Konx_Migration_Session::get( $session_id );
+		if ( $session ) {
+			$prev_processed = (int) $session->processed;
+			$prev_succeeded = (int) $session->succeeded;
+			$prev_failed    = (int) $session->failed;
+			$prev_skipped   = (int) $session->skipped;
+
+			Konx_Migration_Session::update_progress( $session_id, array(
+				'processed' => $prev_processed + $batch_result['processed'],
+				'succeeded' => $prev_succeeded + $batch_result['succeeded'],
+				'failed'    => $prev_failed + $batch_result['failed'],
+				'skipped'   => $prev_skipped + $batch_result['skipped'],
+			) );
+		}
+
+		$is_last = ( $batch_number >= $total_batches );
+
+		// Release lock and finalize on last batch.
+		if ( $is_last ) {
+			$final_status = ( $batch_result['failed'] > 0 || $batch_result['rolled_back'] ) ? 'failed' : 'completed';
+			Konx_Migration_Session::update_status( $session_id, $final_status );
+			Konx_Migration_Executor::release_lock();
+		}
+
+		wp_send_json_success( array(
+			'batch_number'  => $batch_number,
+			'total_batches' => $total_batches,
+			'session_id'    => $session_id,
+			'processed'     => $batch_result['processed'],
+			'succeeded'     => $batch_result['succeeded'],
+			'failed'        => $batch_result['failed'],
+			'skipped'       => $batch_result['skipped'],
+			'rolled_back'   => $batch_result['rolled_back'],
+			'results'       => $batch_result['results'],
+			'is_last'       => $is_last,
+			'status'        => $is_last ? 'complete' : 'in_progress',
 		) );
 	}
 
