@@ -113,6 +113,12 @@ class Konx_Health_Engine {
 			$required[] = 'konx_api_log';
 		}
 
+		// Include migration tables from DB 1.2.0+.
+		if ( defined( 'KONX_AFFILIATE_DB_VERSION' ) && version_compare( KONX_AFFILIATE_DB_VERSION, '1.2.0', '>=' ) ) {
+			$required[] = 'konx_migration_sessions';
+			$required[] = 'konx_migration_log';
+		}
+
 		$missing = array();
 		foreach ( $required as $t ) {
 			$full = $wpdb->prefix . $t;

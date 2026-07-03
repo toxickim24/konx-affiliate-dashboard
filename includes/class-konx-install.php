@@ -130,7 +130,7 @@ class Konx_Install {
 	}
 
 	/**
-	 * Return the CREATE TABLE SQL for all 13 custom tables.
+	 * Return the CREATE TABLE SQL for all 15 custom tables.
 	 *
 	 * @param string $charset_collate The charset/collate string from $wpdb.
 	 * @return array Array of SQL CREATE TABLE statements.
@@ -436,6 +436,57 @@ class Konx_Install {
 			KEY idx_created_at (created_at)
 		) {$charset_collate};";
 
+		// ---------------------------------------------------------------
+		// Table 14: Migration Sessions
+		// ---------------------------------------------------------------
+		$table = $wpdb->prefix . 'konx_migration_sessions';
+		$tables[] = "CREATE TABLE {$table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			session_id varchar(30) NOT NULL,
+			status varchar(20) NOT NULL DEFAULT 'planning',
+			csv_filename varchar(255) NOT NULL,
+			csv_hash varchar(64) NOT NULL,
+			total_records int(10) unsigned NOT NULL DEFAULT 0,
+			processed int(10) unsigned NOT NULL DEFAULT 0,
+			succeeded int(10) unsigned NOT NULL DEFAULT 0,
+			failed int(10) unsigned NOT NULL DEFAULT 0,
+			skipped int(10) unsigned NOT NULL DEFAULT 0,
+			initiated_by bigint(20) unsigned NOT NULL,
+			started_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at datetime DEFAULT NULL,
+			completed_at datetime DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY uq_session_id (session_id),
+			KEY idx_status (status),
+			KEY idx_csv_hash (csv_hash),
+			KEY idx_initiated_by (initiated_by)
+		) {$charset_collate};";
+
+		// ---------------------------------------------------------------
+		// Table 15: Migration Log
+		// ---------------------------------------------------------------
+		$table = $wpdb->prefix . 'konx_migration_log';
+		$tables[] = "CREATE TABLE {$table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			migration_id varchar(30) NOT NULL,
+			external_id varchar(50) DEFAULT NULL,
+			email varchar(255) NOT NULL,
+			planned_action varchar(20) NOT NULL,
+			execution_state varchar(20) NOT NULL DEFAULT 'pending',
+			created_user_id bigint(20) unsigned DEFAULT NULL,
+			created_affiliate_id bigint(20) unsigned DEFAULT NULL,
+			rollback_action varchar(50) DEFAULT NULL,
+			error_message varchar(500) DEFAULT NULL,
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY  (id),
+			KEY idx_migration_id (migration_id),
+			KEY idx_external_id (external_id),
+			KEY idx_email (email),
+			KEY idx_execution_state (execution_state),
+			KEY idx_created_user_id (created_user_id),
+			KEY idx_created_affiliate_id (created_affiliate_id)
+		) {$charset_collate};";
+
 		return $tables;
 	}
 
@@ -527,6 +578,8 @@ class Konx_Install {
 		if ( version_compare( $installed_version, '1.1.0', '<' ) ) {
 			self::upgrade_to_110();
 		}
+
+		// 1.2.0: Migration sessions + log tables — handled by create_tables() via dbDelta().
 
 		self::create_tables();
 		update_option( 'konx_affiliate_db_version', KONX_AFFILIATE_DB_VERSION );
