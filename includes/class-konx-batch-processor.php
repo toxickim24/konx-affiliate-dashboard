@@ -36,6 +36,8 @@ class Konx_Batch_Processor {
 		add_action( 'wp_ajax_konx_migration_verify_execution', array( __CLASS__, 'ajax_verify_execution' ) );
 		add_action( 'wp_ajax_konx_migration_execution_readiness', array( __CLASS__, 'ajax_execution_readiness' ) );
 		add_action( 'wp_ajax_konx_migration_execute_batch', array( __CLASS__, 'ajax_execute_batch' ) );
+		add_action( 'wp_ajax_konx_migration_rollback_preview', array( __CLASS__, 'ajax_rollback_preview' ) );
+		add_action( 'wp_ajax_konx_migration_rollback_execute', array( __CLASS__, 'ajax_rollback_execute' ) );
 	}
 
 	// ------------------------------------------------------------------
@@ -707,6 +709,78 @@ class Konx_Batch_Processor {
 			'is_last'       => $is_last,
 			'status'        => $is_last ? 'complete' : 'in_progress',
 		) );
+	}
+
+	// ------------------------------------------------------------------
+	// AJAX: Rollback Preview
+	// ------------------------------------------------------------------
+
+	/**
+	 * AJAX handler: preview what a rollback would do.
+	 *
+	 * Read-only — no changes made.
+	 */
+	public static function ajax_rollback_preview() {
+		check_ajax_referer( 'konx_migration_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'konx-affiliate-dashboard' ) ), 403 );
+		}
+
+		$session_id = isset( $_POST['session_id'] ) ? sanitize_text_field( wp_unslash( $_POST['session_id'] ) ) : '';
+
+		if ( empty( $session_id ) ) {
+			// Try to find from state.
+			$state = get_option( 'konx_migration_state', array() );
+			$session_id = isset( $state['execution_plan']['session_id'] ) ? $state['execution_plan']['session_id'] : '';
+		}
+
+		if ( empty( $session_id ) ) {
+			wp_send_json_error( array( 'message' => __( 'No session ID provided.', 'konx-affiliate-dashboard' ) ), 400 );
+		}
+
+		$preview = Konx_Migration_Rollback::preview( $session_id );
+
+		if ( is_wp_error( $preview ) ) {
+			wp_send_json_error( array( 'message' => $preview->get_error_message() ), 400 );
+		}
+
+		wp_send_json_success( $preview );
+	}
+
+	// ------------------------------------------------------------------
+	// AJAX: Rollback Execute
+	// ------------------------------------------------------------------
+
+	/**
+	 * AJAX handler: execute a migration rollback.
+	 *
+	 * Validates all rollback safety gates, acquires the rollback lock,
+	 * and reverses the migration in reverse order.
+	 */
+	public static function ajax_rollback_execute() {
+		check_ajax_referer( 'konx_migration_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'konx-affiliate-dashboard' ) ), 403 );
+		}
+
+		$session_id = isset( $_POST['session_id'] ) ? sanitize_text_field( wp_unslash( $_POST['session_id'] ) ) : '';
+
+		if ( empty( $session_id ) ) {
+			wp_send_json_error( array( 'message' => __( 'No session ID provided.', 'konx-affiliate-dashboard' ) ), 400 );
+		}
+
+		$result = Konx_Migration_Rollback::execute( $session_id );
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array(
+				'message' => $result->get_error_message(),
+				'code'    => $result->get_error_code(),
+			), 403 );
+		}
+
+		wp_send_json_success( $result );
 	}
 
 	// ------------------------------------------------------------------
