@@ -33,6 +33,8 @@ class Konx_Batch_Processor {
 		add_action( 'wp_ajax_konx_migration_preflight', array( __CLASS__, 'ajax_preflight' ) );
 		add_action( 'wp_ajax_konx_migration_create_backup', array( __CLASS__, 'ajax_create_backup' ) );
 		add_action( 'wp_ajax_konx_migration_verify_backup', array( __CLASS__, 'ajax_verify_backup' ) );
+		add_action( 'wp_ajax_konx_migration_verify_execution', array( __CLASS__, 'ajax_verify_execution' ) );
+		add_action( 'wp_ajax_konx_migration_execution_readiness', array( __CLASS__, 'ajax_execution_readiness' ) );
 	}
 
 	// ------------------------------------------------------------------
@@ -415,6 +417,158 @@ class Konx_Batch_Processor {
 		wp_send_json_success( array(
 			'summary'      => $summary,
 			'verification' => $verification,
+		) );
+	}
+
+	// ------------------------------------------------------------------
+	// AJAX: Verify Execution
+	// ------------------------------------------------------------------
+
+	/**
+	 * AJAX handler: run execution verification.
+	 *
+	 * Builds an execution plan, verifies every item against live
+	 * database state, optionally populates the migration log with
+	 * 'planned' entries. No production writes.
+	 */
+	public static function ajax_verify_execution() {
+		check_ajax_referer( 'konx_migration_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'konx-affiliate-dashboard' ) ), 403 );
+		}
+
+		$state = get_option( 'konx_migration_state', array() );
+		if ( empty( $state['scan'] ) ) {
+			wp_send_json_error( array( 'message' => __( 'No migration data found.', 'konx-affiliate-dashboard' ) ), 400 );
+		}
+
+		$decisions = self::get_decisions_from_state( $state );
+		if ( empty( $decisions ) ) {
+			wp_send_json_error( array( 'message' => __( 'No decisions available.', 'konx-affiliate-dashboard' ) ), 400 );
+		}
+
+		$batch_size = isset( $_POST['batch_size'] ) ? absint( $_POST['batch_size'] ) : 50;
+		$batch_size = max( 10, min( 200, $batch_size ) );
+
+		$populate_log = ! empty( $_POST['populate_log'] );
+
+		// Build execution plan.
+		$plan = Konx_Execution_Planner::build( $decisions, $batch_size );
+
+		// Run verification.
+		$report = Konx_Execution_Verifier::verify( $plan );
+
+		// Populate migration log preview if requested.
+		$log_result = null;
+		if ( $populate_log ) {
+			$session_id = isset( $state['execution_plan']['session_id'] )
+				? $state['execution_plan']['session_id']
+				: 'preview_' . gmdate( 'Ymd_His' );
+
+			$log_result = Konx_Execution_Verifier::populate_log_preview( $session_id, $plan, $report );
+		}
+
+		// Store verification in state.
+		$state['execution_verification'] = array(
+			'plan_id'     => $report['plan_id'],
+			'verified_at' => $report['verified_at'],
+			'summary'     => $report['summary'],
+			'can_execute' => $report['can_execute'],
+			'rollback'    => $report['rollback'],
+			'duration'    => $report['duration'],
+			'log_preview' => $log_result,
+		);
+		update_option( 'konx_migration_state', $state, false );
+
+		wp_send_json_success( array(
+			'summary'     => $report['summary'],
+			'can_execute' => $report['can_execute'],
+			'items'       => $report['items'],
+			'rollback'    => $report['rollback'],
+			'duration'    => $report['duration'],
+			'log_preview' => $log_result,
+		) );
+	}
+
+	// ------------------------------------------------------------------
+	// AJAX: Execution Readiness Dashboard
+	// ------------------------------------------------------------------
+
+	/**
+	 * AJAX handler: return execution readiness summary.
+	 *
+	 * Aggregates preflight, backup, and verification status into
+	 * a single readiness dashboard. Read-only.
+	 */
+	public static function ajax_execution_readiness() {
+		check_ajax_referer( 'konx_migration_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'konx-affiliate-dashboard' ) ), 403 );
+		}
+
+		$state = get_option( 'konx_migration_state', array() );
+
+		// Preflight status.
+		$preflight = isset( $state['preflight'] ) ? $state['preflight'] : null;
+
+		// Backup status.
+		$backup = isset( $state['backup'] ) ? $state['backup'] : null;
+
+		// Verification status.
+		$verification = isset( $state['execution_verification'] ) ? $state['execution_verification'] : null;
+
+		// Execution plan status.
+		$plan = isset( $state['execution_plan'] ) ? $state['execution_plan'] : null;
+
+		// Approval status.
+		$approved    = ! empty( $state['approved'] );
+		$approved_by = isset( $state['approved_by'] ) ? $state['approved_by'] : null;
+		$approved_at = isset( $state['approved_at'] ) ? $state['approved_at'] : null;
+
+		// Overall readiness.
+		$gates = array(
+			'preflight'    => $preflight && $preflight['passed'],
+			'backup'       => $backup && $backup['verified'],
+			'verification' => $verification && $verification['can_execute'],
+			'plan'         => ! empty( $plan ),
+			'approved'     => $approved,
+		);
+
+		$all_gates_passed = ! in_array( false, $gates, true );
+
+		wp_send_json_success( array(
+			'ready'        => $all_gates_passed,
+			'gates'        => $gates,
+			'preflight'    => $preflight,
+			'backup'       => $backup ? array(
+				'backup_id'   => $backup['backup_id'],
+				'created_at'  => $backup['created_at'],
+				'total_files' => $backup['total_files'],
+				'total_rows'  => $backup['total_rows'],
+				'total_size'  => $backup['total_size'],
+				'verified'    => $backup['verified'],
+			) : null,
+			'verification' => $verification ? array(
+				'summary'     => $verification['summary'],
+				'can_execute' => $verification['can_execute'],
+				'rollback'    => $verification['rollback'],
+				'duration'    => $verification['duration'],
+			) : null,
+			'plan'         => $plan ? array(
+				'plan_id'    => $plan['plan_id'],
+				'total'      => $plan['total'],
+				'actionable' => $plan['actionable'],
+				'skipped'    => $plan['skipped'],
+				'batches'    => $plan['batches'],
+				'duration'   => $plan['duration'],
+			) : null,
+			'approval'     => array(
+				'approved'    => $approved,
+				'approved_by' => $approved_by,
+				'approved_at' => $approved_at,
+			),
 		) );
 	}
 
