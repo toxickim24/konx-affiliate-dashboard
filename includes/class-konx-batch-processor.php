@@ -30,6 +30,9 @@ class Konx_Batch_Processor {
 		add_action( 'wp_ajax_konx_migration_build_plan', array( __CLASS__, 'ajax_build_plan' ) );
 		add_action( 'wp_ajax_konx_migration_queue_status', array( __CLASS__, 'ajax_queue_status' ) );
 		add_action( 'wp_ajax_konx_migration_simulate_batch', array( __CLASS__, 'ajax_simulate_batch' ) );
+		add_action( 'wp_ajax_konx_migration_preflight', array( __CLASS__, 'ajax_preflight' ) );
+		add_action( 'wp_ajax_konx_migration_create_backup', array( __CLASS__, 'ajax_create_backup' ) );
+		add_action( 'wp_ajax_konx_migration_verify_backup', array( __CLASS__, 'ajax_verify_backup' ) );
 	}
 
 	// ------------------------------------------------------------------
@@ -236,6 +239,182 @@ class Konx_Batch_Processor {
 				'completed'  => $offset,
 			),
 			'simulation'    => true,
+		) );
+	}
+
+	// ------------------------------------------------------------------
+	// AJAX: Preflight Checks
+	// ------------------------------------------------------------------
+
+	/**
+	 * AJAX handler: run all preflight checks.
+	 *
+	 * Validates that all preconditions are met before migration can
+	 * proceed. Read-only — no data is modified.
+	 */
+	public static function ajax_preflight() {
+		check_ajax_referer( 'konx_migration_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'konx-affiliate-dashboard' ) ), 403 );
+		}
+
+		$results = Konx_Migration_Preflight::run();
+
+		// Store preflight results in migration state.
+		$state = get_option( 'konx_migration_state', array() );
+		$state['preflight'] = array(
+			'passed'  => $results['passed'],
+			'summary' => array(
+				'total' => $results['total'],
+				'pass'  => $results['pass'],
+				'fail'  => $results['fail'],
+				'warn'  => $results['warn'],
+			),
+			'run_at'  => current_time( 'mysql', true ),
+		);
+		update_option( 'konx_migration_state', $state, false );
+
+		wp_send_json_success( $results );
+	}
+
+	// ------------------------------------------------------------------
+	// AJAX: Create Backup
+	// ------------------------------------------------------------------
+
+	/**
+	 * AJAX handler: create a pre-migration backup.
+	 *
+	 * Exports all relevant database tables and matched user data
+	 * to CSV files. Updates the migration session with backup metadata.
+	 * Only writes backup files — no production data is modified.
+	 */
+	public static function ajax_create_backup() {
+		check_ajax_referer( 'konx_migration_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'konx-affiliate-dashboard' ) ), 403 );
+		}
+
+		$state = get_option( 'konx_migration_state', array() );
+
+		// Get or create session.
+		$session_id = null;
+		if ( ! empty( $state['execution_plan']['session_id'] ) ) {
+			$session_id = $state['execution_plan']['session_id'];
+		}
+
+		if ( ! $session_id ) {
+			$csv_info = isset( $state['csv_info'] ) ? $state['csv_info'] : array();
+			$session  = Konx_Migration_Session::create( array(
+				'csv_filename'  => isset( $csv_info['filename'] ) ? $csv_info['filename'] : 'unknown.csv',
+				'csv_hash'      => isset( $csv_info['hash'] ) ? $csv_info['hash'] : hash( 'sha256', wp_json_encode( $state ) ),
+				'total_records' => isset( $state['scan']['total'] ) ? $state['scan']['total'] : 0,
+				'initiated_by'  => get_current_user_id(),
+			) );
+			$session_id = is_wp_error( $session ) ? 'manual_' . gmdate( 'Ymd_His' ) : $session['session_id'];
+		}
+
+		// Collect matched emails from decision matrix.
+		$matched_emails = array();
+		$decisions = self::get_decisions_from_state( $state );
+		foreach ( $decisions as $d ) {
+			if ( ! empty( $d['email'] ) ) {
+				$matched_emails[] = strtolower( $d['email'] );
+			}
+		}
+		$matched_emails = array_unique( $matched_emails );
+
+		// Create backup.
+		$manifest = Konx_Migration_Backup::create( $session_id, $matched_emails );
+
+		if ( is_wp_error( $manifest ) ) {
+			wp_send_json_error( array( 'message' => $manifest->get_error_message() ), 500 );
+		}
+
+		// Verify backup.
+		$verification = Konx_Migration_Backup::verify( $manifest );
+
+		// Build summary.
+		$summary = Konx_Migration_Backup::summarize( $manifest, $verification );
+
+		// Store backup metadata in migration state.
+		$state['backup'] = array(
+			'backup_id'  => $summary['backup_id'],
+			'session_id' => $summary['session_id'],
+			'created_at' => $summary['created_at'],
+			'directory'  => $summary['directory'],
+			'total_files' => $summary['total_files'],
+			'total_rows' => $summary['total_rows'],
+			'total_size' => $summary['total_size_fmt'],
+			'verified'   => $summary['verified'],
+			'warnings'   => $summary['warnings'],
+		);
+		update_option( 'konx_migration_state', $state, false );
+
+		// Update session with backup info.
+		if ( $session_id && ! str_starts_with( $session_id, 'manual_' ) ) {
+			$session = Konx_Migration_Session::get( $session_id );
+			if ( $session ) {
+				Konx_Migration_Session::update_status( $session_id, 'approved' );
+			}
+		}
+
+		wp_send_json_success( array(
+			'summary'      => $summary,
+			'verification' => $verification,
+			'files'        => $manifest['files'],
+		) );
+	}
+
+	// ------------------------------------------------------------------
+	// AJAX: Verify Backup
+	// ------------------------------------------------------------------
+
+	/**
+	 * AJAX handler: verify an existing backup.
+	 *
+	 * Re-reads the manifest and checks all files. Read-only.
+	 */
+	public static function ajax_verify_backup() {
+		check_ajax_referer( 'konx_migration_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'konx-affiliate-dashboard' ) ), 403 );
+		}
+
+		$backup_id = isset( $_POST['backup_id'] ) ? sanitize_text_field( wp_unslash( $_POST['backup_id'] ) ) : '';
+
+		if ( empty( $backup_id ) ) {
+			// Try from state.
+			$state = get_option( 'konx_migration_state', array() );
+			$backup_id = isset( $state['backup']['backup_id'] ) ? $state['backup']['backup_id'] : '';
+		}
+
+		if ( empty( $backup_id ) ) {
+			wp_send_json_error( array( 'message' => __( 'No backup ID provided.', 'konx-affiliate-dashboard' ) ), 400 );
+		}
+
+		$backup_dir    = Konx_Migration_Backup::get_backup_path( $backup_id );
+		$manifest_path = $backup_dir . '/manifest.json';
+
+		if ( ! file_exists( $manifest_path ) ) {
+			wp_send_json_error( array( 'message' => __( 'Backup manifest not found.', 'konx-affiliate-dashboard' ) ), 404 );
+		}
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
+		$manifest = json_decode( file_get_contents( $manifest_path ), true );
+
+		if ( ! $manifest ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid backup manifest.', 'konx-affiliate-dashboard' ) ), 500 );
+		}
+
+		$verification = Konx_Migration_Backup::verify( $manifest );
+		$summary      = Konx_Migration_Backup::summarize( $manifest, $verification );
+
+		wp_send_json_success( array(
+			'summary'      => $summary,
+			'verification' => $verification,
 		) );
 	}
 

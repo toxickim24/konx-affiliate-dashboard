@@ -149,6 +149,22 @@ if ( $remove_via_constant || $remove_via_setting ) {
 		$wpdb->query( "DELETE FROM {$hpos_meta} WHERE meta_key LIKE '\_konx\_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	}
 
+	// Remove migration backup files.
+	$upload_dir  = wp_upload_dir();
+	$backups_dir = trailingslashit( $upload_dir['basedir'] ) . 'konx-backups';
+	if ( is_dir( $backups_dir ) ) {
+		$it    = new RecursiveDirectoryIterator( $backups_dir, RecursiveDirectoryIterator::SKIP_DOTS );
+		$files = new RecursiveIteratorIterator( $it, RecursiveIteratorIterator::CHILD_FIRST );
+		foreach ( $files as $f ) {
+			if ( $f->isDir() ) {
+				rmdir( $f->getRealPath() ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir
+			} else {
+				unlink( $f->getRealPath() ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
+			}
+		}
+		rmdir( $backups_dir ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir
+	}
+
 	// Flush rewrite rules to remove the affiliate-dashboard endpoint.
 	flush_rewrite_rules();
 }
