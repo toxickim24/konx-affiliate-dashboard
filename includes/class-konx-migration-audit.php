@@ -37,9 +37,10 @@ class Konx_Migration_Audit {
 		$field_map  = isset( $state['field_mappings'] ) ? $state['field_mappings'] : null;
 		$csv_info   = isset( $state['csv_info'] ) ? $state['csv_info'] : null;
 
-		$resolutions     = isset( $state['sponsor_resolutions'] ) ? $state['sponsor_resolutions'] : array();
-		$existing_system = isset( $state['existing_system'] ) ? $state['existing_system'] : null;
-		$decision_matrix = isset( $state['decision_matrix']['summary'] ) ? $state['decision_matrix']['summary'] : null;
+		$resolutions      = isset( $state['sponsor_resolutions'] ) ? $state['sponsor_resolutions'] : array();
+		$existing_system  = isset( $state['existing_system'] ) ? $state['existing_system'] : null;
+		$decision_matrix  = isset( $state['decision_matrix']['summary'] ) ? $state['decision_matrix']['summary'] : null;
+		$integrity_audit  = isset( $state['integrity_audit'] ) ? $state['integrity_audit'] : null;
 
 		return array(
 			'generated_at' => current_time( 'mysql', true ),
@@ -55,6 +56,7 @@ class Konx_Migration_Audit {
 			'sponsors'     => self::build_sponsor_report( $scan, $comparison ),
 			'sponsor_resolutions' => self::build_resolution_summary( $resolutions ),
 			'existing_system' => $existing_system,
+			'integrity_audit' => $integrity_audit,
 			'decision_matrix' => $decision_matrix,
 			'readiness'    => $summary['readiness'],
 			'approved'     => ! empty( $state['approved'] ),
@@ -352,6 +354,31 @@ class Konx_Migration_Audit {
 			$rows[] = array( 'Approval', 'Date', $audit['approved_at'] );
 		}
 
+		// Integrity Audit.
+		if ( ! empty( $audit['integrity_audit']['readiness'] ) ) {
+			$rows[] = array( '' );
+			$rows[] = array( 'INTEGRITY AUDIT' );
+			$ia = $audit['integrity_audit'];
+			$rows[] = array( 'Integrity', 'Readiness Score', ( $ia['readiness']['score'] ?? 0 ) . '%' );
+			$rows[] = array( 'Integrity', 'Status', strtoupper( $ia['readiness']['status'] ?? 'unknown' ) );
+			$rows[] = array( 'Integrity', 'Total Checks', $ia['readiness']['total_checks'] ?? 0 );
+			$rows[] = array( 'Integrity', 'Passed', $ia['readiness']['passed'] ?? 0 );
+			$rows[] = array( 'Integrity', 'Warnings', $ia['readiness']['warnings'] ?? 0 );
+			$rows[] = array( 'Integrity', 'Errors', $ia['readiness']['errors'] ?? 0 );
+
+			$systems = array( 'po10', 'coupon', 'wordpress', 'woocommerce', 'konx' );
+			foreach ( $systems as $skey ) {
+				if ( empty( $ia[ $skey ]['checks'] ) ) {
+					continue;
+				}
+				$rows[] = array( '' );
+				$rows[] = array( strtoupper( $ia[ $skey ]['label'] ?? $skey ), 'Status: ' . strtoupper( $ia[ $skey ]['status'] ?? '' ) );
+				foreach ( $ia[ $skey ]['checks'] as $check ) {
+					$rows[] = array( $ia[ $skey ]['label'] ?? $skey, $check['label'], $check['count'], $check['severity'] );
+				}
+			}
+		}
+
 		$rows[] = array( '' );
 		foreach ( $audit['warnings'] as $w ) {
 			$rows[] = array( 'WARNING', $w );
@@ -384,15 +411,16 @@ class Konx_Migration_Audit {
 			'sponsors'      => $audit['sponsors'],
 			'validation'    => $audit['validation'],
 			'duplicates'    => $audit['duplicates'],
-			'comparison'    => $audit['comparison'],
-			'readiness'     => $audit['readiness'],
-			'projection'    => $audit['summary']['projection'],
-			'approval'      => array(
+			'comparison'      => $audit['comparison'],
+			'integrity_audit' => $audit['integrity_audit'] ?? null,
+			'readiness'       => $audit['readiness'],
+			'projection'      => $audit['summary']['projection'],
+			'approval'        => array(
 				'approved'    => $audit['approved'],
 				'approved_by' => $audit['approved_by'],
 				'approved_at' => $audit['approved_at'],
 			),
-			'warnings'      => $audit['warnings'],
+			'warnings'        => $audit['warnings'],
 		);
 	}
 }

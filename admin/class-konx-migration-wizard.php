@@ -27,23 +27,24 @@ class Konx_Migration_Wizard {
 	 * @var array
 	 */
 	private static $steps = array(
-		'welcome'           => 'Welcome',
-		'source'            => 'Data Source',
-		'field-mapping'     => 'Field Mapping',
-		'health'            => 'Health Check',
-		'types'             => 'Type Mapping',
-		'sponsors'          => 'Sponsors',
-		'conflicts'         => 'Conflicts',
+		'welcome'            => 'Welcome',
+		'source'             => 'Data Source',
+		'field-mapping'      => 'Field Mapping',
+		'health'             => 'Health Check',
+		'types'              => 'Type Mapping',
+		'sponsors'           => 'Sponsors',
+		'conflicts'          => 'Conflicts',
 		'sponsor-resolution' => 'Resolution',
-		'existing-system'   => 'Existing System',
-		'decision-matrix'   => 'Decision Matrix',
-		'validation'        => 'Validation',
-		'source-comparison' => 'Comparison',
-		'summary'           => 'Summary',
-		'preview'           => 'Preview',
-		'dry-run'           => 'Dry Run',
-		'approval'          => 'Approval',
-		'audit'             => 'Audit Report',
+		'existing-system'    => 'Existing System',
+		'integrity-audit'    => 'Integrity Audit',
+		'decision-matrix'    => 'Decision Matrix',
+		'validation'         => 'Validation',
+		'source-comparison'  => 'Comparison',
+		'summary'            => 'Summary',
+		'preview'            => 'Preview',
+		'dry-run'            => 'Dry Run',
+		'approval'           => 'Approval',
+		'audit'              => 'Audit Report',
 	);
 
 	/**
@@ -63,6 +64,8 @@ class Konx_Migration_Wizard {
 		add_action( 'admin_post_konx_migration_approve', array( __CLASS__, 'handle_approve' ) );
 		add_action( 'admin_post_konx_migration_export_audit_csv', array( __CLASS__, 'handle_export_audit_csv' ) );
 		add_action( 'admin_post_konx_migration_export_audit_json', array( __CLASS__, 'handle_export_audit_json' ) );
+		add_action( 'admin_post_konx_migration_export_integrity_csv', array( __CLASS__, 'handle_export_integrity_csv' ) );
+		add_action( 'admin_post_konx_migration_export_integrity_json', array( __CLASS__, 'handle_export_integrity_json' ) );
 	}
 
 	/**
@@ -141,6 +144,9 @@ class Konx_Migration_Wizard {
 						break;
 					case 'existing-system':
 						self::render_existing_system( $state );
+						break;
+					case 'integrity-audit':
+						self::render_integrity_audit( $state );
 						break;
 					case 'decision-matrix':
 						self::render_decision_matrix( $state );
@@ -1556,8 +1562,348 @@ class Konx_Migration_Wizard {
 			<p><?php esc_html_e( 'This analysis is read-only. No WordPress users, affiliates, or financial records have been modified.', 'konx-affiliate-dashboard' ); ?></p>
 		</div>
 
-		<?php self::render_nav( 'sponsor-resolution', 'decision-matrix' ); ?>
+		<?php self::render_nav( 'sponsor-resolution', 'integrity-audit' ); ?>
 		<?php
+	}
+
+	// ------------------------------------------------------------------
+	// Existing Affiliate Integrity Audit
+	// ------------------------------------------------------------------
+
+	/**
+	 * Render the Integrity Audit step.
+	 *
+	 * @param array $state Migration state.
+	 */
+	private static function render_integrity_audit( $state ) {
+		if ( ! isset( $state['scan'] ) ) {
+			self::render_no_scan();
+			return;
+		}
+
+		$audit = Konx_Integrity_Auditor::audit_all( $state );
+
+		// Store in state for the final audit report.
+		$s = get_option( 'konx_migration_state', array() );
+		$s['integrity_audit'] = $audit;
+		update_option( 'konx_migration_state', $s, false );
+
+		$readiness = $audit['readiness'];
+		$score     = $readiness['score'] ?? 0;
+		$status    = $readiness['status'] ?? 'unknown';
+
+		// Status colors.
+		$status_colors = array(
+			'pass'    => array( 'bg' => '#00a32a', 'label' => __( 'PASS', 'konx-affiliate-dashboard' ) ),
+			'warning' => array( 'bg' => '#dba617', 'label' => __( 'WARNING', 'konx-affiliate-dashboard' ) ),
+			'fail'    => array( 'bg' => '#d63638', 'label' => __( 'FAIL', 'konx-affiliate-dashboard' ) ),
+		);
+		$sc = $status_colors[ $status ] ?? $status_colors['fail'];
+
+		?>
+		<h2><?php esc_html_e( 'Existing Affiliate Integrity Audit', 'konx-affiliate-dashboard' ); ?></h2>
+		<p class="description"><?php esc_html_e( 'Comprehensive read-only integrity check across all participating systems. No data is modified.', 'konx-affiliate-dashboard' ); ?></p>
+
+		<!-- Readiness Banner -->
+		<div style="background:<?php echo esc_attr( $sc['bg'] ); ?>;color:#fff;padding:16px 24px;border-radius:6px;margin:16px 0;display:flex;align-items:center;gap:16px;">
+			<div style="font-size:32px;font-weight:700;"><?php echo esc_html( $score ); ?>%</div>
+			<div>
+				<div style="font-size:16px;font-weight:600;"><?php esc_html_e( 'Migration Readiness Score', 'konx-affiliate-dashboard' ); ?></div>
+				<div style="font-size:13px;opacity:0.9;">
+					<?php echo esc_html( $sc['label'] ); ?> &mdash;
+					<?php printf(
+						/* translators: 1: passed count, 2: warning count, 3: error count */
+						esc_html__( '%1$d passed, %2$d warnings, %3$d errors', 'konx-affiliate-dashboard' ),
+						$readiness['passed'],
+						$readiness['warnings'],
+						$readiness['errors']
+					); ?>
+				</div>
+			</div>
+		</div>
+
+		<!-- System Health Cards -->
+		<div class="konx-stats-grid" style="margin:16px 0;">
+			<?php
+			$system_keys = array( 'po10', 'coupon', 'wordpress', 'woocommerce', 'konx', 'cross_system' );
+			foreach ( $system_keys as $sk ) {
+				if ( ! isset( $audit[ $sk ] ) ) {
+					continue;
+				}
+				$sys    = $audit[ $sk ];
+				$slabel = $sys['label'] ?? $sk;
+				$sstat  = $sys['status'] ?? 'info';
+				$scolor = '#00a32a';
+				if ( 'warning' === $sstat ) {
+					$scolor = '#dba617';
+				} elseif ( 'fail' === $sstat || 'error' === $sstat ) {
+					$scolor = '#d63638';
+				} elseif ( 'info' === $sstat ) {
+					$scolor = '#2271b1';
+				}
+				self::stat_card( strtoupper( $sstat ), $slabel . ' Health', $scolor );
+			}
+			?>
+		</div>
+
+		<?php
+		// Render detail sections for each system.
+		foreach ( $system_keys as $sk ) {
+			if ( ! isset( $audit[ $sk ] ) ) {
+				continue;
+			}
+			$sys = $audit[ $sk ];
+
+			if ( 'cross_system' === $sk ) {
+				self::render_integrity_cross_system( $sys );
+				continue;
+			}
+
+			self::render_integrity_system_section( $sys );
+		}
+		?>
+
+		<!-- Export Options -->
+		<div style="display:flex;gap:8px;margin:16px 0;">
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline;">
+				<?php wp_nonce_field( 'konx_export_integrity', 'konx_integrity_nonce' ); ?>
+				<input type="hidden" name="action" value="konx_migration_export_integrity_csv">
+				<button type="submit" class="button">
+					<span class="dashicons dashicons-download" style="vertical-align:text-bottom;"></span>
+					<?php esc_html_e( 'Export Integrity Report (CSV)', 'konx-affiliate-dashboard' ); ?>
+				</button>
+			</form>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline;">
+				<?php wp_nonce_field( 'konx_export_integrity', 'konx_integrity_nonce' ); ?>
+				<input type="hidden" name="action" value="konx_migration_export_integrity_json">
+				<button type="submit" class="button">
+					<span class="dashicons dashicons-download" style="vertical-align:text-bottom;"></span>
+					<?php esc_html_e( 'Export Integrity Report (JSON)', 'konx-affiliate-dashboard' ); ?>
+				</button>
+			</form>
+		</div>
+
+		<div class="notice notice-info inline" style="margin:0 0 16px;">
+			<p><?php esc_html_e( 'This audit is 100% read-only. No records in any system have been created, modified, or deleted.', 'konx-affiliate-dashboard' ); ?></p>
+		</div>
+
+		<?php self::render_nav( 'existing-system', 'decision-matrix' ); ?>
+		<?php
+	}
+
+	/**
+	 * Render a single system integrity section.
+	 *
+	 * @param array $sys System audit results.
+	 */
+	private static function render_integrity_system_section( $sys ) {
+		$label  = $sys['label'] ?? 'System';
+		$status = $sys['status'] ?? 'info';
+		$checks = $sys['checks'] ?? array();
+		$detail = $sys['detail'] ?? array();
+		$total  = $sys['total'] ?? 0;
+
+		$scolors = array( 'pass' => '#00a32a', 'warning' => '#dba617', 'fail' => '#d63638', 'error' => '#d63638', 'info' => '#2271b1' );
+		$color   = $scolors[ $status ] ?? '#646970';
+
+		?>
+		<div class="konx-card" style="margin:16px 0;border-left:4px solid <?php echo esc_attr( $color ); ?>;">
+			<h3 style="margin-top:0;display:flex;align-items:center;gap:8px;">
+				<?php echo esc_html( $label ); ?>
+				<?php echo wp_kses_post( self::badge(
+					'fail' === $status || 'error' === $status ? 'error' : ( 'warning' === $status ? 'warning' : 'ok' ),
+					strtoupper( $status )
+				) ); ?>
+				<span style="font-weight:normal;font-size:12px;color:#646970;margin-left:auto;"><?php printf( esc_html__( '%s records', 'konx-affiliate-dashboard' ), esc_html( number_format( $total ) ) ); ?></span>
+			</h3>
+			<?php if ( ! empty( $checks ) ) : ?>
+				<table class="widefat fixed striped" style="font-size:12px;">
+					<thead>
+						<tr>
+							<th><?php esc_html_e( 'Check', 'konx-affiliate-dashboard' ); ?></th>
+							<th style="width:80px;"><?php esc_html_e( 'Count', 'konx-affiliate-dashboard' ); ?></th>
+							<th style="width:100px;"><?php esc_html_e( 'Status', 'konx-affiliate-dashboard' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $checks as $key => $check ) : ?>
+							<tr>
+								<td><?php echo esc_html( $check['label'] ); ?></td>
+								<td><?php echo esc_html( number_format( $check['count'] ) ); ?></td>
+								<td><?php echo wp_kses_post( self::badge(
+									'error' === $check['severity'] ? 'error' : ( 'warning' === $check['severity'] ? 'warning' : 'ok' ),
+									strtoupper( $check['severity'] )
+								) ); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
+			<?php
+			// Show expandable details.
+			if ( ! empty( $detail ) ) :
+				foreach ( $detail as $dkey => $dval ) :
+					$dlabel = ucwords( str_replace( '_', ' ', $dkey ) );
+					?>
+					<details style="margin-top:8px;">
+						<summary style="cursor:pointer;font-size:12px;color:#2271b1;font-weight:600;">
+							<?php echo esc_html( $dlabel ); ?> (<?php echo esc_html( is_array( $dval ) ? count( $dval ) : 0 ); ?>)
+						</summary>
+						<div style="margin-top:6px;font-size:11px;max-height:200px;overflow:auto;background:#f6f7f7;padding:8px;border-radius:4px;">
+							<pre style="margin:0;white-space:pre-wrap;"><?php echo esc_html( wp_json_encode( $dval, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) ); ?></pre>
+						</div>
+					</details>
+				<?php endforeach;
+			endif;
+
+			// Show CA structures if present.
+			if ( ! empty( $sys['structures'] ) ) :
+				?>
+				<details style="margin-top:8px;">
+					<summary style="cursor:pointer;font-size:12px;color:#2271b1;font-weight:600;">
+						<?php esc_html_e( 'Discovered Structures', 'konx-affiliate-dashboard' ); ?>
+					</summary>
+					<div style="margin-top:6px;font-size:11px;">
+						<?php if ( ! empty( $sys['structures']['tables'] ) ) : ?>
+							<table class="widefat fixed striped" style="font-size:11px;">
+								<thead>
+									<tr>
+										<th><?php esc_html_e( 'Table', 'konx-affiliate-dashboard' ); ?></th>
+										<th style="width:80px;"><?php esc_html_e( 'Exists', 'konx-affiliate-dashboard' ); ?></th>
+										<th style="width:80px;"><?php esc_html_e( 'Records', 'konx-affiliate-dashboard' ); ?></th>
+									</tr>
+								</thead>
+								<tbody>
+									<?php foreach ( $sys['structures']['tables'] as $tkey => $tinfo ) : ?>
+										<tr>
+											<td><code><?php echo esc_html( $tinfo['table'] ); ?></code></td>
+											<td><?php echo $tinfo['exists'] ? '<span style="color:#00a32a;">Yes</span>' : '<span style="color:#646970;">No</span>'; ?></td>
+											<td><?php echo esc_html( number_format( $tinfo['count'] ) ); ?></td>
+										</tr>
+									<?php endforeach; ?>
+								</tbody>
+							</table>
+						<?php endif; ?>
+						<?php if ( ! empty( $sys['structures']['financial'] ) ) : ?>
+							<h4 style="margin:12px 0 4px;"><?php esc_html_e( 'Financial Data Discovery', 'konx-affiliate-dashboard' ); ?></h4>
+							<table class="widefat fixed striped" style="font-size:11px;">
+								<thead><tr><th><?php esc_html_e( 'Item', 'konx-affiliate-dashboard' ); ?></th><th style="width:80px;"><?php esc_html_e( 'Count', 'konx-affiliate-dashboard' ); ?></th></tr></thead>
+								<tbody>
+									<?php foreach ( $sys['structures']['financial'] as $finfo ) : ?>
+										<tr>
+											<td><?php echo esc_html( $finfo['label'] ); ?></td>
+											<td><?php echo esc_html( number_format( $finfo['count'] ) ); ?></td>
+										</tr>
+									<?php endforeach; ?>
+								</tbody>
+							</table>
+						<?php endif; ?>
+					</div>
+				</details>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render cross-system reconciliation section.
+	 *
+	 * @param array $sys Cross-system results.
+	 */
+	private static function render_integrity_cross_system( $sys ) {
+		$summary = $sys['summary'] ?? array();
+		$status  = $sys['status'] ?? 'info';
+		$scolors = array( 'pass' => '#00a32a', 'warning' => '#dba617', 'fail' => '#d63638', 'info' => '#2271b1' );
+		$color   = $scolors[ $status ] ?? '#646970';
+
+		$labels = array(
+			'total_emails'     => __( 'Total Unique Emails', 'konx-affiliate-dashboard' ),
+			'only_po10'        => __( 'Exists Only in PowerOf10', 'konx-affiliate-dashboard' ),
+			'only_ca'          => __( 'Exists Only in Coupon Affiliates', 'konx-affiliate-dashboard' ),
+			'only_wp'          => __( 'Exists Only in WordPress', 'konx-affiliate-dashboard' ),
+			'only_konx'        => __( 'Exists Only in KonX', 'konx-affiliate-dashboard' ),
+			'in_all'           => __( 'Exists in All Systems', 'konx-affiliate-dashboard' ),
+			'po10_and_wp'      => __( 'PO10 + WordPress Match', 'konx-affiliate-dashboard' ),
+			'po10_and_ca'      => __( 'PO10 + Coupon Affiliates Match', 'konx-affiliate-dashboard' ),
+			'po10_no_wp'       => __( 'PO10 Missing WordPress Account', 'konx-affiliate-dashboard' ),
+			'merge_candidates' => __( 'Merge Candidates (PO10+CA, no KonX)', 'konx-affiliate-dashboard' ),
+			'missing_in_dest'  => __( 'Need New WP Account', 'konx-affiliate-dashboard' ),
+		);
+		?>
+		<div class="konx-card" style="margin:16px 0;border-left:4px solid <?php echo esc_attr( $color ); ?>;">
+			<h3 style="margin-top:0;"><?php esc_html_e( 'Cross-System Reconciliation', 'konx-affiliate-dashboard' ); ?></h3>
+			<table class="widefat fixed striped" style="font-size:12px;">
+				<thead>
+					<tr>
+						<th><?php esc_html_e( 'Metric', 'konx-affiliate-dashboard' ); ?></th>
+						<th style="width:100px;"><?php esc_html_e( 'Count', 'konx-affiliate-dashboard' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ( $summary as $key => $val ) : ?>
+						<tr>
+							<td><?php echo esc_html( $labels[ $key ] ?? ucwords( str_replace( '_', ' ', $key ) ) ); ?></td>
+							<td style="font-weight:600;"><?php echo esc_html( number_format( $val ) ); ?></td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
+		<?php
+	}
+
+	// ------------------------------------------------------------------
+	// Integrity Audit Export Handlers
+	// ------------------------------------------------------------------
+
+	/**
+	 * Export integrity audit as CSV.
+	 */
+	public static function handle_export_integrity_csv() {
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
+		}
+		check_admin_referer( 'konx_export_integrity', 'konx_integrity_nonce' );
+
+		$state = get_option( 'konx_migration_state', array() );
+		$audit = ! empty( $state['integrity_audit'] ) ? $state['integrity_audit'] : Konx_Integrity_Auditor::audit_all( $state );
+
+		$csv      = Konx_Integrity_Auditor::export_csv( $audit );
+		$filename = 'konx-integrity-audit-' . gmdate( 'Y-m-d-His' ) . '.csv';
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename=' . $filename );
+		header( 'Pragma: no-cache' );
+		header( 'Expires: 0' );
+
+		$output = fopen( 'php://output', 'w' );
+		foreach ( $csv as $row ) {
+			fputcsv( $output, $row );
+		}
+		fclose( $output );
+		exit;
+	}
+
+	/**
+	 * Export integrity audit as JSON.
+	 */
+	public static function handle_export_integrity_json() {
+		if ( ! current_user_can( 'manage_konx_settings' ) ) {
+			wp_die( esc_html__( 'Unauthorized.', 'konx-affiliate-dashboard' ) );
+		}
+		check_admin_referer( 'konx_export_integrity', 'konx_integrity_nonce' );
+
+		$state = get_option( 'konx_migration_state', array() );
+		$audit = ! empty( $state['integrity_audit'] ) ? $state['integrity_audit'] : Konx_Integrity_Auditor::audit_all( $state );
+
+		$json     = Konx_Integrity_Auditor::export_json( $audit );
+		$filename = 'konx-integrity-audit-' . gmdate( 'Y-m-d-His' ) . '.json';
+		header( 'Content-Type: application/json; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename=' . $filename );
+		header( 'Pragma: no-cache' );
+		header( 'Expires: 0' );
+
+		echo wp_json_encode( $json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
+		exit;
 	}
 
 	// ------------------------------------------------------------------
@@ -1744,7 +2090,7 @@ class Konx_Migration_Wizard {
 
 		if ( empty( $sm ) ) {
 			echo '<div class="notice notice-warning inline"><p>' . esc_html__( 'No source records available.', 'konx-affiliate-dashboard' ) . '</p></div>';
-			self::render_nav( 'conflicts', null );
+			self::render_nav( 'integrity-audit', null );
 			return;
 		}
 
@@ -1911,7 +2257,7 @@ class Konx_Migration_Wizard {
 			<p><?php esc_html_e( 'This matrix is read-only. No users, affiliates, or financial records have been created or modified.', 'konx-affiliate-dashboard' ); ?></p>
 		</div>
 
-		<?php self::render_nav( 'conflicts', 'validation' ); ?>
+		<?php self::render_nav( 'integrity-audit', 'validation' ); ?>
 		<?php
 	}
 
@@ -2757,6 +3103,24 @@ class Konx_Migration_Wizard {
 						<tr><td style="padding:4px 0;"><?php esc_html_e( 'WC Customers', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;"><?php echo esc_html( number_format( $es['wc_customers'] ) ); ?></td></tr>
 						<tr><td style="padding:4px 0;"><?php esc_html_e( 'New Affiliates', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;color:#00a32a;"><?php echo esc_html( number_format( $es['new_affiliates'] ) ); ?></td></tr>
 						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Conflicts', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;color:<?php echo $es['conflicts'] > 0 ? '#d63638' : '#00a32a'; ?>;"><?php echo esc_html( $es['conflicts'] ); ?></td></tr>
+					</table>
+				</div>
+			<?php endif; ?>
+
+			<!-- Integrity Audit Summary -->
+			<?php if ( ! empty( $audit['integrity_audit']['readiness'] ) ) : ?>
+				<?php $ia = $audit['integrity_audit']; ?>
+				<div class="konx-card">
+					<h2 style="display:flex;align-items:center;gap:8px;">
+						<span class="dashicons dashicons-shield" style="color:#2271b1;"></span>
+						<?php esc_html_e( 'Integrity Audit', 'konx-affiliate-dashboard' ); ?>
+					</h2>
+					<table style="width:100%;font-size:13px;">
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Readiness Score', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;"><?php echo esc_html( $ia['readiness']['score'] ); ?>%</td></tr>
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Total Checks', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;"><?php echo esc_html( $ia['readiness']['total_checks'] ); ?></td></tr>
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Passed', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;color:#00a32a;"><?php echo esc_html( $ia['readiness']['passed'] ); ?></td></tr>
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Warnings', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;color:<?php echo $ia['readiness']['warnings'] > 0 ? '#dba617' : '#00a32a'; ?>;"><?php echo esc_html( $ia['readiness']['warnings'] ); ?></td></tr>
+						<tr><td style="padding:4px 0;"><?php esc_html_e( 'Errors', 'konx-affiliate-dashboard' ); ?></td><td style="padding:4px 0;text-align:right;font-weight:600;color:<?php echo $ia['readiness']['errors'] > 0 ? '#d63638' : '#00a32a'; ?>;"><?php echo esc_html( $ia['readiness']['errors'] ); ?></td></tr>
 					</table>
 				</div>
 			<?php endif; ?>
