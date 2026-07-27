@@ -358,7 +358,7 @@ class Konx_Batch_Processor {
 		update_option( 'konx_migration_state', $state, false );
 
 		// Update session with backup info.
-		if ( $session_id && ! str_starts_with( $session_id, 'manual_' ) ) {
+		if ( $session_id && 0 !== strpos( $session_id, 'manual_' ) ) {
 			$session = Konx_Migration_Session::get( $session_id );
 			if ( $session ) {
 				Konx_Migration_Session::update_status( $session_id, 'approved' );
