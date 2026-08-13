@@ -108,7 +108,7 @@ class Konx_Source_Comparator {
 				sprintf( '%d emails', $new ),
 				'new',
 				'info',
-				sprintf( __( '%d CSV records have no WordPress account. New accounts will be created during migration.', 'konx-affiliate-dashboard' ), $new )
+				sprintf( __( '%d CSV records have no direct email match to an existing WordPress account. See Decision Matrix for resolved matches via the Coupon Affiliates bridge.', 'konx-affiliate-dashboard' ), $new )
 			);
 		}
 
