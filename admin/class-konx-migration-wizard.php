@@ -1943,73 +1943,110 @@ class Konx_Migration_Wizard {
 				}
 			}
 		}
-
-		// Build sponsor resolution index.
 		$resolutions = isset( $state['sponsor_resolutions'] ) ? $state['sponsor_resolutions'] : array();
 
-		// WP users by email.
+		// --- Priority 1: WP users by normalized email ---
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-		$wp_rows    = $wpdb->get_results( "SELECT ID, user_email FROM {$wpdb->users}" );
+		$wp_rows     = $wpdb->get_results( "SELECT ID, user_email FROM {$wpdb->users}" );
 		$wp_by_email = array();
 		foreach ( $wp_rows as $u ) {
-			$wp_by_email[ strtolower( $u->user_email ) ] = (int) $u->ID;
+			$wp_by_email[ self::normalize_email_for_match( $u->user_email ) ] = (int) $u->ID;
 		}
 
-		// Coupon Affiliates by WP user ID.
+		// --- Priority 2: CA dual index (by userid AND by couponcode for bridge) ---
 		$ca_table  = $wpdb->prefix . 'wcusage_register';
 		$ca_exists = ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $ca_table ) ) === $ca_table );
-		$ca_by_user = array();
+		$ca_by_user              = array(); // [uid][]  = CA rows
+		$ca_by_code              = array(); // [code][] = CA rows (bridge)
+		$ca_code_accepted_counts = array(); // [code]   = int (duplicate guard)
 		if ( $ca_exists ) {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			$ca_rows = $wpdb->get_results( "SELECT userid, couponcode, status FROM {$ca_table}" );
-			foreach ( $ca_rows as $ca ) {
-				$ca_by_user[ (int) $ca->userid ] = $ca;
+			$ca_all_rows = $wpdb->get_results( "SELECT id, userid, couponcode, status FROM `{$ca_table}`" );
+			foreach ( $ca_all_rows as $ca ) {
+				$uid    = (int) ( $ca->userid ?? 0 );
+				$code   = strtolower( trim( $ca->couponcode ?? '' ) );
+				$status = strtolower( trim( $ca->status ?? '' ) );
+				if ( $uid > 0 ) {
+					$ca_by_user[ $uid ][] = $ca; // exclude NULL/zero userid
+				}
+				if ( '' !== $code ) {
+					$ca_by_code[ $code ][] = $ca;
+					if ( 'accepted' === $status && $uid > 0 ) {
+						$ca_code_accepted_counts[ $code ] = ( $ca_code_accepted_counts[ $code ] ?? 0 ) + 1;
+					}
+				}
 			}
 		}
+		// Resolve ca_by_user: keep only accepted; multiple accepted = ambiguous (null).
+		$ca_user_resolved = array();
+		foreach ( $ca_by_user as $uid => $rows ) {
+			$accepted = array_values( array_filter( $rows, function ( $ca ) {
+				return 'accepted' === strtolower( trim( $ca->status ?? '' ) );
+			} ) );
+			$ca_user_resolved[ $uid ] = ( 1 === count( $accepted ) ) ? $accepted[0] : null;
+		}
 
-		// KonX affiliates by email (via wp_user_id join).
+		// --- Priority 3: KonX affiliates by email (FIX: user_id not wp_user_id) ---
 		$konx_table = $wpdb->prefix . 'konx_affiliates';
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$konx_rows     = $wpdb->get_results( "SELECT a.id, a.referral_code, u.user_email FROM {$konx_table} a LEFT JOIN {$wpdb->users} u ON a.wp_user_id = u.ID" );
+		$konx_rows  = $wpdb->get_results(
+			"SELECT a.id, a.referral_code, u.user_email
+			 FROM {$konx_table} a
+			 LEFT JOIN {$wpdb->users} u ON a.user_id = u.ID"
+		);
 		$konx_by_email = array();
 		foreach ( $konx_rows as $k ) {
 			if ( ! empty( $k->user_email ) ) {
-				$konx_by_email[ strtolower( $k->user_email ) ] = $k;
+				$konx_by_email[ self::normalize_email_for_match( $k->user_email ) ] = $k;
 			}
 		}
 
 		// Team name set for sponsor resolution.
 		$team_set = array();
 		foreach ( $records as $r ) {
-			$tn = strtolower( trim( $r->team_name ) );
+			$tn = strtolower( trim( $r->team_name ?? '' ) );
 			if ( '' !== $tn ) {
 				$team_set[ $tn ] = true;
 			}
 		}
 
-		// Build decisions.
+		// Prevent same WP user being claimed by multiple PO10 records via CA bridge.
+		$ca_claimed_wp_users = array(); // [ wp_user_id => po10_id ]
+
 		$decisions = array();
 		$summary   = array(
-			'total'       => count( $records ),
-			'create'      => 0,
-			'link_wp'     => 0,
-			'link_ca'     => 0,
-			'link_konx'   => 0,
-			'skip'        => 0,
-			'review'      => 0,
-			'invalid'     => 0,
+			'total'           => count( $records ),
+			'create'          => 0,
+			'link_wp'         => 0,
+			'link_ca'         => 0,
+			'link_konx'       => 0,
+			'skip'            => 0,
+			'review'          => 0,
+			'invalid'         => 0,
+			'matched_email'   => 0, // informational
+			'matched_ca_code' => 0, // informational
+			'matched_konx'    => 0, // informational
 		);
 
 		$row_num = 0;
 		foreach ( $records as $r ) {
 			$row_num++;
-			$email   = strtolower( trim( $r->email ) );
-			$wp_id   = isset( $wp_by_email[ $email ] ) ? $wp_by_email[ $email ] : null;
-			$ca_rec  = ( $wp_id && isset( $ca_by_user[ $wp_id ] ) ) ? $ca_by_user[ $wp_id ] : null;
-			$konx    = isset( $konx_by_email[ $email ] ) ? $konx_by_email[ $email ] : null;
+			$email = self::normalize_email_for_match( $r->email ?? '' );
+			$wp_id = isset( $wp_by_email[ $email ] ) ? $wp_by_email[ $email ] : null;
 
-			// Sponsor status.
-			$sponsor_tn = strtolower( trim( $r->referrer_team_name ) );
+			// Primary CA lookup (email → WP → CA).
+			$ca_rec    = null;
+			$ca_id     = null;
+			$ca_bridge = false;
+			if ( $wp_id && isset( $ca_user_resolved[ $wp_id ] ) ) {
+				$ca_rec = $ca_user_resolved[ $wp_id ];
+				$ca_id  = $ca_rec ? (int) $ca_rec->id : null;
+			}
+
+			$konx = isset( $konx_by_email[ $email ] ) ? $konx_by_email[ $email ] : null;
+
+			// Sponsor status (informational only — never blocks decision).
+			$sponsor_tn     = strtolower( trim( $r->referrer_team_name ?? '' ) );
 			$sponsor_status = 'none';
 			if ( '' !== $sponsor_tn ) {
 				if ( isset( $team_set[ $sponsor_tn ] ) ) {
@@ -2029,29 +2066,113 @@ class Konx_Migration_Wizard {
 				$val_errors = $error_ids[ $row_num ];
 			}
 
-			// --- Decision logic ---
-			$decision = 'create';
-			$reasons  = array();
+			$decision      = 'create';
+			$reasons       = array();
+			$match_method  = 'none';
+			$manual_review = false;
+			$confidence    = 'none';
 
 			if ( 'error' === $val_status ) {
-				$decision = 'invalid';
-				$reasons  = $val_errors;
+				$decision   = 'invalid';
+				$reasons    = $val_errors;
+				$confidence = 'n/a';
 			} elseif ( $konx ) {
-				$decision  = 'skip';
-				$reasons[] = sprintf( __( 'Already in KonX (affiliate #%d)', 'konx-affiliate-dashboard' ), $konx->id );
+				$decision     = 'skip';
+				$reasons[]    = sprintf( __( 'Already in KonX (affiliate #%d)', 'konx-affiliate-dashboard' ), $konx->id );
+				$match_method = 'konx';
+				$confidence   = 'high';
+				$summary['matched_konx']++;
 			} elseif ( $ca_rec && $wp_id ) {
-				$decision  = 'link_ca';
-				$reasons[] = sprintf( __( 'Existing Coupon Affiliate (coupon: %s)', 'konx-affiliate-dashboard' ), $ca_rec->couponcode );
+				$decision     = 'link_ca';
+				$reasons[]    = sprintf( __( 'Existing Coupon Affiliate (coupon: %s)', 'konx-affiliate-dashboard' ), $ca_rec->couponcode );
+				$match_method = 'email_then_ca';
+				$confidence   = 'high';
+				$summary['matched_email']++;
 			} elseif ( $wp_id ) {
-				$decision  = 'link_wp';
-				$reasons[] = sprintf( __( 'Existing WP user #%d', 'konx-affiliate-dashboard' ), $wp_id );
+				$decision     = 'link_wp';
+				$reasons[]    = sprintf( __( 'Existing WP user #%d', 'konx-affiliate-dashboard' ), $wp_id );
+				$match_method = 'email';
+				$confidence   = 'high';
+				$summary['matched_email']++;
 			} else {
-				$decision  = 'create';
-				$reasons[] = __( 'New user and affiliate', 'konx-affiliate-dashboard' );
+				// CA bridge fallback: PO10 team_name → CA couponcode → WP user.
+				$code = strtolower( trim( $r->team_name ?? '' ) );
+				if ( '' !== $code && $ca_exists && isset( $ca_by_code[ $code ] ) ) {
+					$accepted_count = $ca_code_accepted_counts[ $code ] ?? 0;
+					if ( $accepted_count > 1 ) {
+						$decision      = 'review';
+						$manual_review = true;
+						$confidence    = 'low';
+						$reasons[]     = sprintf(
+							__( 'CA bridge ambiguous: %1$d accepted records share coupon "%2$s"', 'konx-affiliate-dashboard' ),
+							$accepted_count,
+							$code
+						);
+					} elseif ( 1 === $accepted_count ) {
+						$accepted_rows = array_values( array_filter( $ca_by_code[ $code ], function ( $ca ) {
+							return 'accepted' === strtolower( trim( $ca->status ?? '' ) ) && (int) ( $ca->userid ?? 0 ) > 0;
+						} ) );
+						if ( ! empty( $accepted_rows ) ) {
+							$candidate     = $accepted_rows[0];
+							$candidate_uid = (int) $candidate->userid;
+							$candidate_wp  = get_userdata( $candidate_uid );
+							if ( ! $candidate_wp ) {
+								$reasons[]  = sprintf(
+									__( 'CA bridge skipped: coupon "%1$s" → WP #%2$d not found', 'konx-affiliate-dashboard' ),
+									$code,
+									$candidate_uid
+								);
+								$confidence = 'low';
+							} elseif ( isset( $ca_claimed_wp_users[ $candidate_uid ] ) ) {
+								$decision      = 'review';
+								$manual_review = true;
+								$confidence    = 'low';
+								$reasons[]     = sprintf(
+									__( 'CA bridge conflict: WP #%1$d already claimed by PO10 #%2$d', 'konx-affiliate-dashboard' ),
+									$candidate_uid,
+									$ca_claimed_wp_users[ $candidate_uid ]
+								);
+							} else {
+								$candidate_email            = self::normalize_email_for_match( $candidate_wp->user_email );
+								$wp_id                      = $candidate_uid;
+								$ca_rec                     = $candidate;
+								$ca_id                      = (int) $candidate->id;
+								$ca_bridge                  = true;
+								$ca_claimed_wp_users[ $candidate_uid ] = $r->id;
+								if ( isset( $konx_by_email[ $candidate_email ] ) ) {
+									$konx         = $konx_by_email[ $candidate_email ];
+									$decision     = 'skip';
+									$match_method = 'ca_bridge';
+									$confidence   = 'high';
+									$reasons[]    = sprintf(
+										__( 'CA bridge: coupon "%1$s" → WP #%2$d → already in KonX #%3$d', 'konx-affiliate-dashboard' ),
+										$code,
+										$candidate_uid,
+										$konx->id
+									);
+									$summary['matched_konx']++;
+								} else {
+									$decision     = 'link_ca';
+									$match_method = 'ca_bridge';
+									$confidence   = 'high';
+									$reasons[]    = sprintf(
+										__( 'CA bridge: coupon "%1$s" → WP #%2$d (email mismatch resolved)', 'konx-affiliate-dashboard' ),
+										$code,
+										$candidate_uid
+									);
+									$summary['matched_ca_code']++;
+								}
+							}
+						}
+					}
+				}
+				if ( 'create' === $decision ) {
+					$reasons[]  = __( 'New user and affiliate', 'konx-affiliate-dashboard' );
+					$confidence = 'low';
+				}
 			}
 
-			// Add sponsor context.
-			if ( 'orphan' === $sponsor_status && 'invalid' !== $decision ) {
+			if ( 'orphan' === $sponsor_status && ! in_array( $decision, array( 'invalid', 'skip' ), true ) ) {
 				$reasons[] = __( 'Sponsor unresolved (will be NULL)', 'konx-affiliate-dashboard' );
 			}
 
@@ -2060,13 +2181,21 @@ class Konx_Migration_Wizard {
 			$decisions[] = array(
 				'po10_id'        => $r->id,
 				'email'          => $r->email,
+				'first_name'     => sanitize_text_field( $r->user_fname ?? '' ),
+				'last_name'      => sanitize_text_field( $r->user_lname ?? '' ),
 				'team_name'      => $r->team_name,
+				'affiliate_type' => Konx_Migration_Engine::normalize_type( $r->promotional_title ?? '' ),
 				'sponsor'        => $r->referrer_team_name,
 				'wp_user_id'     => $wp_id,
 				'ca_coupon'      => $ca_rec ? $ca_rec->couponcode : null,
+				'ca_id'          => $ca_id,
+				'ca_bridge'      => $ca_bridge,
 				'konx_id'        => $konx ? (int) $konx->id : null,
 				'val_status'     => $val_status,
 				'sponsor_status' => $sponsor_status,
+				'match_method'   => $match_method,
+				'confidence'     => $confidence,
+				'manual_review'  => $manual_review,
 				'decision'       => $decision,
 				'reasons'        => $reasons,
 			);
@@ -2289,19 +2418,27 @@ class Konx_Migration_Wizard {
 		header( 'Expires: 0' );
 
 		$output = fopen( 'php://output', 'w' );
-		fputcsv( $output, array( 'PO10_ID', 'Email', 'Team_Name', 'Sponsor', 'WP_User_ID', 'CA_Coupon', 'KonX_ID', 'Validation', 'Sponsor_Status', 'Decision', 'Reasons' ) );
+		fputcsv( $output, array( 'PO10_ID', 'Email', 'First_Name', 'Last_Name', 'Team_Name', 'Affiliate_Type', 'Sponsor', 'WP_User_ID', 'CA_Coupon', 'CA_ID', 'CA_Bridge', 'KonX_ID', 'Validation', 'Sponsor_Status', 'Match_Method', 'Confidence', 'Manual_Review', 'Decision', 'Reasons' ) );
 
 		foreach ( $decisions as $d ) {
 			fputcsv( $output, array(
 				$d['po10_id'],
 				$d['email'],
+				$d['first_name'] ?? '',
+				$d['last_name'] ?? '',
 				$d['team_name'],
+				$d['affiliate_type'] ?? '',
 				$d['sponsor'],
 				$d['wp_user_id'] ?? '',
 				$d['ca_coupon'] ?? '',
+				$d['ca_id'] ?? '',
+				! empty( $d['ca_bridge'] ) ? 'YES' : '',
 				$d['konx_id'] ?? '',
 				$d['val_status'],
 				$d['sponsor_status'],
+				$d['match_method'] ?? '',
+				$d['confidence'] ?? '',
+				! empty( $d['manual_review'] ) ? 'YES' : '',
 				$d['decision'],
 				implode( '; ', $d['reasons'] ),
 			) );
@@ -4070,5 +4207,21 @@ class Konx_Migration_Wizard {
 		$f = get_transient( 'konx_migration_feedback' );
 		if ( $f ) { delete_transient( 'konx_migration_feedback' ); }
 		return $f;
+	}
+
+	/**
+	 * Normalize an email address for matching.
+	 * Strips Unicode invisible/zero-width characters before lowercasing.
+	 *
+	 * @param string $email Raw email string.
+	 * @return string Normalized email.
+	 */
+	private static function normalize_email_for_match( $email ) {
+		$email = (string) $email;
+		// Strip Unicode zero-width and invisible characters.
+		$email = preg_replace( '/[\x{200B}-\x{200D}\x{FEFF}\x{2060}\x{00AD}]/u', '', $email );
+		// Strip non-breaking spaces (U+00A0, UTF-8: \xC2\xA0).
+		$email = str_replace( "\xC2\xA0", '', $email );
+		return strtolower( trim( $email ) );
 	}
 }
