@@ -1319,10 +1319,10 @@ class Konx_Migration_Wizard {
 			}
 		}
 
-		// KonX affiliates by email (via wp_user_id join).
+		// KonX affiliates by email (via user_id join).
 		$konx_table = $wpdb->prefix . 'konx_affiliates';
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$konx_rows    = $wpdb->get_results( "SELECT a.*, u.user_email FROM {$konx_table} a LEFT JOIN {$wpdb->users} u ON a.wp_user_id = u.ID" );
+		$konx_rows    = $wpdb->get_results( "SELECT a.*, u.user_email FROM {$konx_table} a LEFT JOIN {$wpdb->users} u ON a.user_id = u.ID" );
 		$konx_by_email = array();
 		foreach ( $konx_rows as $k ) {
 			if ( ! empty( $k->user_email ) ) {
