@@ -4,7 +4,7 @@ Tags: woocommerce, affiliate, dashboard, commissions
 Requires at least: 5.8
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.15.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -27,6 +27,28 @@ KonX Affiliate Dashboard provides a complete affiliate management system built o
 Yes. WooCommerce must be installed and active for this plugin to function.
 
 == Changelog ==
+
+= 1.15.0 =
+**Migration reconciliation**
+* Improved matching of PowerOf10 records to existing WordPress users.
+* Safe Coupon Affiliates → WordPress bridge with accepted-CA-only safeguards.
+* Duplicate and ambiguous bridge protection.
+* Unicode email normalization.
+* Corrected existing KonX user joins in reconciliation engine.
+
+**Canonical migration planning**
+* Separated reconciliation from validation into distinct wizard steps.
+* Introduced Final Migration Plan as the single canonical source for all downstream steps.
+* Comparison, Import Preview, and Dry Run now all consume the same canonical plan.
+* Explicit planned-action labels per record (Create, Link WP, Link CA Bridge, Skip).
+* Accurate WP-user and affiliate creation projections in the Dry Run.
+
+**Hardening**
+* Protected Source Comparator email lookup against non-string WordPress values on PHP 8.1+.
+
+**Safety**
+* Migration Execution is NOT enabled in this release.
+* No automatic import or migration execution has been introduced.
 
 = 1.0.0 =
 * Initial plugin structure and bootstrap.

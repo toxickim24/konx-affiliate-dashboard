@@ -812,9 +812,19 @@ class Konx_Migration_Engine {
 	/**
 	 * Run a full dry-run simulation — no database writes.
 	 *
+	 * When $dm_decisions is provided (from the Decision Matrix state), projections
+	 * are derived directly from the canonical per-record decisions rather than
+	 * independently re-matching. This ensures parity with the Decision Matrix.
+	 *
+	 * @param array|null $dm_decisions Decision Matrix decisions array, or null for
+	 *                                 independent processing (legacy behaviour).
 	 * @return array Dry-run summary.
 	 */
-	public function dry_run() {
+	public function dry_run( $dm_decisions = null ) {
+		if ( ! empty( $dm_decisions ) ) {
+			return $this->dry_run_from_decisions( $dm_decisions );
+		}
+
 		global $wpdb;
 
 		$records = $this->get_source_records();
@@ -844,6 +854,29 @@ class Konx_Migration_Engine {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$konx_codes_raw = $wpdb->get_col( "SELECT LOWER(referral_code) FROM {$wpdb->prefix}konx_affiliates" );
 		$konx_codes = array_flip( $konx_codes_raw );
+
+		// CA bridge index for dry-run parity with decision matrix.
+		$ca_dr_table           = $wpdb->prefix . 'wcusage_register';
+		$ca_dr_by_code         = array();
+		$ca_dr_accepted_counts = array();
+		$ca_dr_claimed_uids    = array();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$ca_dr_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $ca_dr_table ) );
+		if ( $ca_dr_exists ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$ca_dr_rows = $wpdb->get_results( "SELECT userid, couponcode, status FROM `{$ca_dr_table}`" );
+			foreach ( $ca_dr_rows as $br ) {
+				$br_code   = strtolower( trim( $br->couponcode ?? '' ) );
+				$br_uid    = (int) ( $br->userid ?? 0 );
+				$br_status = strtolower( trim( $br->status ?? '' ) );
+				if ( '' !== $br_code ) {
+					$ca_dr_by_code[ $br_code ][] = $br;
+					if ( 'accepted' === $br_status && $br_uid > 0 ) {
+						$ca_dr_accepted_counts[ $br_code ] = ( $ca_dr_accepted_counts[ $br_code ] ?? 0 ) + 1;
+					}
+				}
+			}
+		}
 
 		foreach ( $records as $row ) {
 			$record = $this->build_record( $row );
@@ -880,6 +913,22 @@ class Konx_Migration_Engine {
 			}
 
 			$wp_user = get_user_by( 'email', $record['email'] );
+			// CA bridge fallback when email match fails.
+			if ( ! $wp_user && ! empty( $code_lower ) && isset( $ca_dr_by_code[ $code_lower ] ) ) {
+				if ( 1 === ( $ca_dr_accepted_counts[ $code_lower ] ?? 0 ) ) {
+					$bridge_cands = array_values( array_filter( $ca_dr_by_code[ $code_lower ], function ( $br ) {
+						return 'accepted' === strtolower( trim( $br->status ?? '' ) ) && (int) ( $br->userid ?? 0 ) > 0;
+					} ) );
+					if ( ! empty( $bridge_cands ) ) {
+						$bridge_uid  = (int) $bridge_cands[0]->userid;
+						$bridge_data = get_userdata( $bridge_uid );
+						if ( $bridge_data && ! isset( $ca_dr_claimed_uids[ $bridge_uid ] ) ) {
+							$wp_user                          = $bridge_data;
+							$ca_dr_claimed_uids[ $bridge_uid ] = true;
+						}
+					}
+				}
+			}
 			if ( ! $wp_user ) {
 				$will_create_user++;
 			} else {
@@ -928,6 +977,125 @@ class Konx_Migration_Engine {
 			'warnings'               => $warnings,
 			'estimated_batches'      => $est_batches,
 			'batch_size'             => $batch_size,
+		);
+	}
+
+	// ------------------------------------------------------------------
+	// 7b. Dry Run — Decision Matrix path
+	// ------------------------------------------------------------------
+
+	/**
+	 * Derive dry-run projections from canonical Decision Matrix decisions.
+	 *
+	 * Pure computation — no DB reads except KonX referral codes for sponsor
+	 * resolution. No writes whatsoever.
+	 *
+	 * @param array $dm_decisions Decision array from build_decision_matrix().
+	 * @return array Dry-run summary (same schema as dry_run()).
+	 */
+	private function dry_run_from_decisions( $dm_decisions ) {
+		global $wpdb;
+
+		$will_create_user      = 0;
+		$will_create_affiliate = 0;
+		$will_skip             = 0;
+		$will_link_sponsor     = 0;
+		$orphan_sponsors       = 0;
+		$by_type               = array();
+		$errors                = array();
+		$warnings              = array();
+
+		// Team names present in Decision Matrix (for sponsor resolution).
+		$dm_team_names = array();
+		foreach ( $dm_decisions as $d ) {
+			$tn = strtolower( trim( $d['team_name'] ?? '' ) );
+			if ( '' !== $tn ) {
+				$dm_team_names[ $tn ] = true;
+			}
+		}
+
+		// Existing KonX referral codes (for sponsor resolution).
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$konx_codes_raw = $wpdb->get_col( "SELECT LOWER(referral_code) FROM {$wpdb->prefix}konx_affiliates" );
+		$konx_codes     = array_flip( $konx_codes_raw );
+
+		foreach ( $dm_decisions as $d ) {
+			$decision = $d['decision'] ?? 'create';
+			$type     = $d['affiliate_type'] ?? 'sales_agent';
+
+			switch ( $decision ) {
+				case 'create':
+					$will_create_user++;
+					$will_create_affiliate++;
+					$by_type[ $type ] = ( $by_type[ $type ] ?? 0 ) + 1;
+					break;
+				case 'link_wp':
+				case 'link_ca':
+					$will_create_affiliate++;
+					$by_type[ $type ] = ( $by_type[ $type ] ?? 0 ) + 1;
+					break;
+				case 'skip':
+					$will_skip++;
+					$errors[] = array(
+						'po10_id' => $d['po10_id'],
+						'email'   => $d['email'],
+						'errors'  => array( 'already_in_konx' ),
+					);
+					break;
+				case 'review':
+					$will_skip++;
+					$errors[] = array(
+						'po10_id' => $d['po10_id'],
+						'email'   => $d['email'],
+						'errors'  => array( 'manual_review_required' ),
+					);
+					break;
+				case 'invalid':
+					$will_skip++;
+					$errors[] = array(
+						'po10_id' => $d['po10_id'],
+						'email'   => $d['email'],
+						'errors'  => ! empty( $d['reasons'] ) ? $d['reasons'] : array( 'invalid' ),
+					);
+					break;
+			}
+
+			// Sponsor analysis — only for records being actively created/linked.
+			if ( in_array( $decision, array( 'create', 'link_wp', 'link_ca' ), true ) ) {
+				$code_lower   = strtolower( trim( $d['team_name'] ?? '' ) );
+				$parent_lower = strtolower( trim( $d['sponsor'] ?? '' ) );
+				if ( '' !== $parent_lower ) {
+					if ( $parent_lower === $code_lower ) {
+						$warnings[] = array( 'po10_id' => $d['po10_id'], 'email' => $d['email'], 'warning' => 'self_referral' );
+					} elseif ( isset( $dm_team_names[ $parent_lower ] ) || isset( $konx_codes[ $parent_lower ] ) ) {
+						$will_link_sponsor++;
+					} else {
+						$orphan_sponsors++;
+						$warnings[] = array( 'po10_id' => $d['po10_id'], 'email' => $d['email'], 'warning' => 'orphan_sponsor' );
+					}
+				}
+			}
+		}
+
+		$batch_size  = 50;
+		$est_batches = (int) ceil( $will_create_affiliate / $batch_size );
+
+		return array(
+			'source'                 => $this->source,
+			'total_records'          => count( $dm_decisions ),
+			'will_create_users'      => $will_create_user,
+			'will_create_affiliates' => $will_create_affiliate,
+			'will_skip'              => $will_skip,
+			'will_link_sponsors'     => $will_link_sponsor,
+			'orphan_sponsors'        => $orphan_sponsors,
+			'type_normalized'        => 0,
+			'type_defaulted'         => 0,
+			'by_type'                => $by_type,
+			'errors'                 => $errors,
+			'warnings'               => $warnings,
+			'estimated_batches'      => $est_batches,
+			'batch_size'             => $batch_size,
+			'from_decision_matrix'   => true,
 		);
 	}
 
