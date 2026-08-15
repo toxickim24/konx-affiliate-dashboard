@@ -73,7 +73,10 @@ class Konx_Source_Comparator {
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$wp_emails_raw = $wpdb->get_col( "SELECT LOWER(user_email) FROM {$wpdb->users}" );
-		$wp_emails = array_flip( $wp_emails_raw );
+		// $wpdb->get_col() converts empty-string column values to null via get_var().
+		// array_flip() warns on non-string/non-integer values in PHP 8.1+.
+		// Filter to strings only; users with null/empty email cannot be matched anyway.
+		$wp_emails = array_flip( array_filter( $wp_emails_raw, 'is_string' ) );
 
 		$matched = 0;
 		$new     = 0;
