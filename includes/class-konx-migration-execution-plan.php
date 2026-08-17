@@ -252,17 +252,38 @@ class Konx_Migration_Execution_Plan {
 					array( '%d', '%d', '%s', '%d', '%s', '%s', '%d', '%s' )
 				);
 
-				if ( false !== $ledger_inserted ) {
-					$ledger_records++;
+				if ( false === $ledger_inserted ) {
+					// A missing ledger row for an actionable record is fatal: the executor
+					// needs both the plan row and the ledger row to operate correctly.
+					self::cleanup_failed_snapshot( $session_uuid, $session_id );
+					return new \WP_Error(
+						'ledger_insert_failed',
+						sprintf(
+							/* translators: %d: PO10 record ID */
+							__( 'Failed to insert ledger record for PO10 ID %d.', 'konx-affiliate-dashboard' ),
+							$po10_id
+						)
+					);
 				}
+
+				$ledger_records++;
 			}
 		}
 
 		// 6. Freeze the session (draft → frozen).
 		$freeze_result = Konx_Migration_Exec_Session::freeze( $session_uuid );
 		if ( is_wp_error( $freeze_result ) ) {
-			// Non-fatal — session is still valid, just not frozen. Log the issue.
-			// In production this should be alerted, but for Phase 24C-6B we continue.
+			// A successful snapshot MUST be frozen. If freeze fails, clean up and
+			// surface the error so the caller knows the snapshot was not committed.
+			self::cleanup_failed_snapshot( $session_uuid, $session_id );
+			return new \WP_Error(
+				'snapshot_freeze_failed',
+				sprintf(
+					/* translators: %s: upstream error message */
+					__( 'Snapshot creation failed: could not freeze session. %s', 'konx-affiliate-dashboard' ),
+					$freeze_result->get_error_message()
+				)
+			);
 		}
 
 		return array(

@@ -245,8 +245,9 @@ class Konx_Migration_Execution_Ledger {
 		if ( in_array( $status, array( 'completed', 'failed', 'partial', 'skipped' ), true ) ) {
 			$data['completed_at'] = current_time( 'mysql', true );
 		} elseif ( 'processing' === $status ) {
-			$data['started_at']     = current_time( 'mysql', true );
-			$data['attempt_count']  = null; // Will be incremented via separate query.
+			$data['started_at'] = current_time( 'mysql', true );
+			// attempt_count is NOT NULL DEFAULT 0; increment atomically via separate
+			// query below rather than writing NULL here (strict MySQL would reject it).
 		}
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching

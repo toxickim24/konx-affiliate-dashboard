@@ -130,7 +130,7 @@ class Konx_Install {
 	}
 
 	/**
-	 * Return the CREATE TABLE SQL for all 15 custom tables.
+	 * Return the CREATE TABLE SQL for all 18 custom tables.
 	 *
 	 * @param string $charset_collate The charset/collate string from $wpdb.
 	 * @return array Array of SQL CREATE TABLE statements.
