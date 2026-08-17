@@ -344,7 +344,13 @@ class Konx_Test_WPDB {
 			}
 		}
 		$sql = "UPDATE `{$table}` SET " . implode( ', ', $set ) . " WHERE " . implode( ' AND ', $where_parts );
-		$ok  = $this->conn->query( $sql );
+		try {
+			$ok = $this->conn->query( $sql );
+		} catch ( mysqli_sql_exception $e ) {
+			// Triggered by SIGNAL in triggers (e.g. test-installed freeze-blocker).
+			$this->last_error = $e->getMessage();
+			return false;
+		}
 		$this->last_error = $this->conn->error;
 		return $ok ? $this->conn->affected_rows : false;
 	}

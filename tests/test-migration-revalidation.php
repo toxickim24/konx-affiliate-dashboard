@@ -22,6 +22,16 @@
 require_once __DIR__ . '/bootstrap-integration.php';
 
 // ---------------------------------------------------------------------------
+// Guard: remove any test-installed triggers left by a previous crashed run.
+// G5-T13 and G5-T14 install BEFORE INSERT / BEFORE UPDATE triggers and drop
+// them after each test. If a prior run crashed before the DROP, the trigger
+// persists and will break all subsequent create_snapshot() calls.
+// ---------------------------------------------------------------------------
+global $wpdb;
+$wpdb->query( 'DROP TRIGGER IF EXISTS konx_test_block_ledger_insert' );
+$wpdb->query( 'DROP TRIGGER IF EXISTS konx_test_block_session_freeze' );
+
+// ---------------------------------------------------------------------------
 // Test infrastructure.
 // ---------------------------------------------------------------------------
 $pass  = 0;
@@ -943,6 +953,80 @@ echo "\n  [G2-T12] link_ca — CA user gained KonX affiliate → conflict\n";
 	}
 }
 
+// T13: 'link_wp' with wp_user_id=null → critical:missing_wp_user_id → conflict overall.
+echo "\n  [G2-T13] link_wp — wp_user_id=null → conflict:missing_wp_user_id\n";
+{
+	// A malformed snapshot where the 'link_wp' decision has no wp_user_id.
+	// The revalidator's check_link_wp() detects (int) coupon_affiliate_id === 0
+	// and returns STATUS_CRITICAL with type=missing_wp_user_id, driving the
+	// overall status to 'conflict'.
+	$g2t13_decisions = array(
+		array(
+			'po10_id'        => 777113,
+			'email'          => 'g2t13-null-wpuid@revaltest.local',
+			'decision'       => 'link_wp',
+			'affiliate_type' => 'sales_agent',
+			'team_name'      => 'G2T13CODE',
+			'wp_user_id'     => null,
+			'ca_id'          => null,
+		),
+	);
+	$g2t13_snap = create_test_snapshot( $g2t13_decisions );
+	if ( ! $g2t13_snap ) {
+		revalidation_assert( 'G2-T13: snapshot create failed', false );
+	} else {
+		$g2t13_result = revalidate_with_fmp_override( $g2t13_snap['session_uuid'], $g2t13_decisions );
+		revalidation_assert(
+			'G2-T13a: revalidation_status=conflict',
+			'conflict' === $g2t13_result['revalidation_status'],
+			'status=' . $g2t13_result['revalidation_status']
+		);
+		revalidation_assert(
+			'G2-T13b: issue type=missing_wp_user_id',
+			'missing_wp_user_id' === ( $g2t13_result['issues'][0]['type'] ?? '' ),
+			'type=' . ( $g2t13_result['issues'][0]['type'] ?? 'none' )
+		);
+		cleanup_test_snapshot( $g2t13_snap['session_uuid'], $g2t13_snap['session_id'] );
+	}
+}
+
+// T14: 'link_ca' with coupon_affiliate_id=null → critical:missing_ca_id → conflict overall.
+echo "\n  [G2-T14] link_ca — coupon_affiliate_id=null → conflict:missing_ca_id\n";
+{
+	// A malformed snapshot where the 'link_ca' decision has no ca_id.
+	// The revalidator's check_link_ca() detects (int) coupon_affiliate_id === 0
+	// and returns STATUS_CRITICAL with type=missing_ca_id, driving the
+	// overall status to 'conflict'.
+	$g2t14_decisions = array(
+		array(
+			'po10_id'        => 777114,
+			'email'          => 'g2t14-null-caid@revaltest.local',
+			'decision'       => 'link_ca',
+			'affiliate_type' => 'sales_agent',
+			'team_name'      => 'G2T14CODE',
+			'wp_user_id'     => 99,
+			'ca_id'          => null,
+		),
+	);
+	$g2t14_snap = create_test_snapshot( $g2t14_decisions );
+	if ( ! $g2t14_snap ) {
+		revalidation_assert( 'G2-T14: snapshot create failed', false );
+	} else {
+		$g2t14_result = revalidate_with_fmp_override( $g2t14_snap['session_uuid'], $g2t14_decisions );
+		revalidation_assert(
+			'G2-T14a: revalidation_status=conflict',
+			'conflict' === $g2t14_result['revalidation_status'],
+			'status=' . $g2t14_result['revalidation_status']
+		);
+		revalidation_assert(
+			'G2-T14b: issue type=missing_ca_id',
+			'missing_ca_id' === ( $g2t14_result['issues'][0]['type'] ?? '' ),
+			'type=' . ( $g2t14_result['issues'][0]['type'] ?? 'none' )
+		);
+		cleanup_test_snapshot( $g2t14_snap['session_uuid'], $g2t14_snap['session_id'] );
+	}
+}
+
 // ---------------------------------------------------------------------------
 // GROUP 3: Full live QA run (2,402-record revalidation)
 // ---------------------------------------------------------------------------
@@ -1677,6 +1761,11 @@ echo "\n  [G5-T12] Transaction rollback — insert failure leaves no partial sta
 			'team_name' => 'G5T12CODEB', 'wp_user_id' => null, 'ca_id' => null ),
 	);
 
+	// Capture session count before attempt so G5-T12d can assert delta=0.
+	$t12_pre_session_count = (int) $wpdb->get_var(
+		"SELECT COUNT(*) FROM {$wpdb->prefix}konx_migration_exec_sessions"
+	);
+
 	$t12_result = Konx_Migration_Execution_Plan::create_snapshot( $t12_dup_decisions );
 
 	if ( ! is_wp_error( $t12_result ) ) {
@@ -1714,7 +1803,189 @@ echo "\n  [G5-T12] Transaction rollback — insert failure leaves no partial sta
 			0 === $t12_orphan_ledger,
 			'orphan_ledger_rows=' . $t12_orphan_ledger
 		);
+		// G5-T12d: session table delta must be 0 (session INSERT was inside TX).
+		$t12_post_session_count = (int) $wpdb->get_var(
+			"SELECT COUNT(*) FROM {$wpdb->prefix}konx_migration_exec_sessions"
+		);
+		revalidation_assert(
+			'G5-T12d: no orphan session rows after ROLLBACK (delta=0)',
+			0 === ( $t12_post_session_count - $t12_pre_session_count ),
+			'delta=' . ( $t12_post_session_count - $t12_pre_session_count )
+		);
 	}
+}
+
+// G5-T13: Transaction rollback — ledger insert failure leaves no session/plan rows.
+echo "\n  [G5-T13] Transaction rollback — ledger failure leaves no session/plan rows\n";
+{
+	// Strategy: install a BEFORE INSERT trigger on the ledger table that raises
+	// a SIGNAL. When create_snapshot() attempts to insert the first ledger row
+	// (for the actionable 'create' decision), the trigger fires, $wpdb->insert()
+	// returns false, and create_snapshot() issues ROLLBACK.
+	// ROLLBACK must remove: the draft session row (step 4) AND the plan row (step 5).
+
+	$t13_pre_sessions = (int) $wpdb->get_var(
+		"SELECT COUNT(*) FROM {$wpdb->prefix}konx_migration_exec_sessions"
+	);
+	$t13_pre_plan = (int) $wpdb->get_var(
+		"SELECT COUNT(*) FROM {$wpdb->prefix}konx_migration_execution_plan"
+	);
+	$t13_pre_ledger = (int) $wpdb->get_var(
+		"SELECT COUNT(*) FROM {$wpdb->prefix}konx_migration_execution_ledger"
+	);
+
+	$t13_ledger_table = $wpdb->prefix . 'konx_migration_execution_ledger';
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+	$wpdb->query( 'DROP TRIGGER IF EXISTS konx_test_block_ledger_insert' );
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+	$wpdb->query(
+		"CREATE TRIGGER konx_test_block_ledger_insert
+		 BEFORE INSERT ON `{$t13_ledger_table}`
+		 FOR EACH ROW
+		 BEGIN
+		   SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'TEST: ledger insert blocked by G5-T13';
+		 END"
+	);
+
+	$t13_decisions = array(
+		// A 'create' decision — actionable, so ledger insert is attempted after
+		// the plan insert succeeds. The trigger fires on the ledger insert.
+		array(
+			'po10_id'        => 900913,
+			'email'          => 'g5t13-ledger-fail@revaltest.local',
+			'decision'       => 'create',
+			'affiliate_type' => 'sales_agent',
+			'team_name'      => 'G5T13CODE',
+			'wp_user_id'     => null,
+			'ca_id'          => null,
+		),
+	);
+
+	$t13_result = Konx_Migration_Execution_Plan::create_snapshot( $t13_decisions );
+
+	// Remove trigger regardless of outcome.
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+	$wpdb->query( 'DROP TRIGGER IF EXISTS konx_test_block_ledger_insert' );
+
+	$t13_delta_sessions = (int) $wpdb->get_var(
+		"SELECT COUNT(*) FROM {$wpdb->prefix}konx_migration_exec_sessions"
+	) - $t13_pre_sessions;
+	$t13_delta_plan = (int) $wpdb->get_var(
+		"SELECT COUNT(*) FROM {$wpdb->prefix}konx_migration_execution_plan"
+	) - $t13_pre_plan;
+	$t13_delta_ledger = (int) $wpdb->get_var(
+		"SELECT COUNT(*) FROM {$wpdb->prefix}konx_migration_execution_ledger"
+	) - $t13_pre_ledger;
+
+	revalidation_assert(
+		'G5-T13a: create_snapshot() returns WP_Error on ledger insert failure',
+		is_wp_error( $t13_result ),
+		'result_type=' . ( is_wp_error( $t13_result ) ? 'WP_Error' : gettype( $t13_result ) )
+	);
+	revalidation_assert(
+		'G5-T13b: no orphan session rows after ROLLBACK (delta=0)',
+		0 === $t13_delta_sessions,
+		'delta_sessions=' . $t13_delta_sessions
+	);
+	revalidation_assert(
+		'G5-T13c: no orphan plan rows after ROLLBACK (delta=0)',
+		0 === $t13_delta_plan,
+		'delta_plan=' . $t13_delta_plan
+	);
+	revalidation_assert(
+		'G5-T13d: no orphan ledger rows after ROLLBACK (delta=0)',
+		0 === $t13_delta_ledger,
+		'delta_ledger=' . $t13_delta_ledger
+	);
+}
+
+// G5-T14: Transaction rollback — freeze failure leaves no session/plan/ledger rows.
+echo "\n  [G5-T14] Transaction rollback — freeze failure leaves no session/plan/ledger rows\n";
+{
+	// Strategy: install a BEFORE UPDATE trigger on the sessions table that raises
+	// a SIGNAL when NEW.status = 'frozen'. freeze() calls update_status() which
+	// issues UPDATE ... SET status='frozen'. The trigger fires, $wpdb->update()
+	// returns false, freeze() returns WP_Error, create_snapshot() issues ROLLBACK.
+	// ROLLBACK must remove: draft session (step 4), plan row (step 5), no ledger
+	// rows because the 'invalid' decision is non-actionable.
+
+	$t14_pre_sessions = (int) $wpdb->get_var(
+		"SELECT COUNT(*) FROM {$wpdb->prefix}konx_migration_exec_sessions"
+	);
+	$t14_pre_plan = (int) $wpdb->get_var(
+		"SELECT COUNT(*) FROM {$wpdb->prefix}konx_migration_execution_plan"
+	);
+	$t14_pre_ledger = (int) $wpdb->get_var(
+		"SELECT COUNT(*) FROM {$wpdb->prefix}konx_migration_execution_ledger"
+	);
+
+	$t14_sessions_table = $wpdb->prefix . 'konx_migration_exec_sessions';
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+	$wpdb->query( 'DROP TRIGGER IF EXISTS konx_test_block_session_freeze' );
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+	$wpdb->query(
+		"CREATE TRIGGER konx_test_block_session_freeze
+		 BEFORE UPDATE ON `{$t14_sessions_table}`
+		 FOR EACH ROW
+		 BEGIN
+		   IF NEW.status = 'frozen' THEN
+		     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'TEST: freeze blocked by G5-T14';
+		   END IF;
+		 END"
+	);
+
+	$t14_decisions = array(
+		// An 'invalid' decision — non-actionable, so no ledger rows are attempted.
+		// This lets the test reach the freeze step (step 7) after plan insert succeeds.
+		array(
+			'po10_id'        => 900914,
+			'email'          => 'g5t14-freeze-fail@revaltest.local',
+			'decision'       => 'invalid',
+			'affiliate_type' => 'sales_agent',
+			'team_name'      => '',
+			'wp_user_id'     => null,
+			'ca_id'          => null,
+		),
+	);
+
+	$t14_result = Konx_Migration_Execution_Plan::create_snapshot( $t14_decisions );
+
+	// Remove trigger regardless of outcome.
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+	$wpdb->query( 'DROP TRIGGER IF EXISTS konx_test_block_session_freeze' );
+
+	$t14_delta_sessions = (int) $wpdb->get_var(
+		"SELECT COUNT(*) FROM {$wpdb->prefix}konx_migration_exec_sessions"
+	) - $t14_pre_sessions;
+	$t14_delta_plan = (int) $wpdb->get_var(
+		"SELECT COUNT(*) FROM {$wpdb->prefix}konx_migration_execution_plan"
+	) - $t14_pre_plan;
+	$t14_delta_ledger = (int) $wpdb->get_var(
+		"SELECT COUNT(*) FROM {$wpdb->prefix}konx_migration_execution_ledger"
+	) - $t14_pre_ledger;
+
+	revalidation_assert(
+		'G5-T14a: create_snapshot() returns WP_Error on freeze failure',
+		is_wp_error( $t14_result ),
+		'result_type=' . ( is_wp_error( $t14_result ) ? 'WP_Error' : gettype( $t14_result ) )
+	);
+	revalidation_assert(
+		'G5-T14b: no orphan session rows after ROLLBACK (delta=0)',
+		0 === $t14_delta_sessions,
+		'delta_sessions=' . $t14_delta_sessions
+	);
+	revalidation_assert(
+		'G5-T14c: no orphan plan rows after ROLLBACK (delta=0)',
+		0 === $t14_delta_plan,
+		'delta_plan=' . $t14_delta_plan
+	);
+	revalidation_assert(
+		'G5-T14d: no orphan ledger rows after ROLLBACK (delta=0)',
+		0 === $t14_delta_ledger,
+		'delta_ledger=' . $t14_delta_ledger
+	);
 }
 
 // ---------------------------------------------------------------------------

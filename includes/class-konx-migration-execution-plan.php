@@ -73,11 +73,13 @@ class Konx_Migration_Execution_Plan {
 	 * This is the primary entry point for Phase 24C-6B. It:
 	 *   1. Validates the FMP decisions array and expected counts.
 	 *   2. Computes the source hash and plan hash.
-	 *   3. Creates an exec_session row (draft).
-	 *   4. Inserts all FMP records into the plan snapshot table.
-	 *   5. Inserts pending ledger rows for actionable records.
-	 *   6. Freezes the session (transitions draft → frozen).
-	 *   7. Returns the session UUID and summary.
+	 *   3. Verifies all migration metadata tables are InnoDB.
+	 *   4. Opens a transaction covering all metadata writes.
+	 *   5. Creates an exec_session row (draft) inside the transaction.
+	 *   6. Inserts all FMP records into the plan snapshot table.
+	 *   7. Inserts pending ledger rows for actionable records.
+	 *   8. Freezes the session (transitions draft → frozen).
+	 *   9. Commits the transaction and returns the session UUID and summary.
 	 *
 	 * SAFETY: Does NOT create WP users. Does NOT create KonX affiliates.
 	 * Does NOT trigger the executor. Does NOT modify production data.
@@ -126,9 +128,9 @@ class Konx_Migration_Execution_Plan {
 		//
 		// create_snapshot() relies on START TRANSACTION / COMMIT / ROLLBACK for
 		// atomic metadata writes. MyISAM silently ignores these statements, so
-		// partial state could persist on failure. This check must run BEFORE any
-		// DB writes (including the draft session insert below) so that a non-InnoDB
-		// table is detected before any rows are created.
+		// partial state could persist on failure. This check must run BEFORE
+		// START TRANSACTION so that a non-InnoDB table is detected before any
+		// rows are created.
 		//
 		// This guard is independent of upgrade_to_141() — the installer cannot be
 		// assumed to have run successfully on every environment.
@@ -137,7 +139,28 @@ class Konx_Migration_Execution_Plan {
 			return $innodb_check;
 		}
 
-		// 4. Create exec session (draft).
+		// ------------------------------------------------------------------
+		// TRANSACTION SCOPE
+		//
+		// START TRANSACTION covers ALL four metadata write operations:
+		//   - wp_konx_migration_exec_sessions   (draft session + freeze transition)
+		//   - wp_konx_migration_execution_plan  (plan snapshot records)
+		//   - wp_konx_migration_execution_ledger (pending ledger rows)
+		//
+		// The draft session INSERT is inside the transaction. If any subsequent
+		// operation fails, ROLLBACK removes the session row, all plan rows, and
+		// all ledger rows atomically — no orphan draft sessions can survive a
+		// failed snapshot attempt.
+		//
+		// Business data (WP users, KonX affiliates, Coupon Affiliate registers,
+		// WP posts) is NOT written here — these tables are only touched by
+		// the executor, which runs in a separate, later phase.
+		// ------------------------------------------------------------------
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$wpdb->query( 'START TRANSACTION' );
+
+		// 4. Create exec session (draft) — inside the transaction so a ROLLBACK
+		// on any subsequent failure removes the session row with no orphan.
 		$session_result = Konx_Migration_Exec_Session::create(
 			array(
 				'source_type'             => 'csv',
@@ -158,30 +181,13 @@ class Konx_Migration_Execution_Plan {
 		);
 
 		if ( is_wp_error( $session_result ) ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$wpdb->query( 'ROLLBACK' );
 			return $session_result;
 		}
 
 		$session_uuid = $session_result['session_uuid'];
 		$session_id   = $session_result['id'];
-
-		// ------------------------------------------------------------------
-		// TRANSACTION SCOPE
-		//
-		// The following START TRANSACTION / COMMIT / ROLLBACK wraps ONLY
-		// the three migration metadata tables:
-		//   - wp_konx_migration_exec_sessions   (draft session + freeze)
-		//   - wp_konx_migration_execution_plan  (plan snapshot records)
-		//   - wp_konx_migration_execution_ledger (pending ledger rows)
-		//
-		// Business data (WP users, KonX affiliates, Coupon Affiliate registers,
-		// WP posts) is NOT written here — these tables are only touched by
-		// the executor, which runs in a separate, later phase. The transaction
-		// guarantees atomic commit: either ALL metadata rows land together or
-		// NONE do. On any failure, ROLLBACK removes all partial state so no
-		// cleanup helper is needed for the rows inside the transaction.
-		// ------------------------------------------------------------------
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-		$wpdb->query( 'START TRANSACTION' );
 
 		// 5. Insert plan snapshot records (batch insert for efficiency).
 		$plan_table    = $wpdb->prefix . self::TABLE;
@@ -253,9 +259,9 @@ class Konx_Migration_Execution_Plan {
 			);
 
 			if ( false === $inserted ) {
-				// ROLLBACK handles removal of the session row and any plan rows
-				// already inserted in this transaction. No manual cleanup needed
-				// for rows inside the transaction.
+				// ROLLBACK atomically removes the draft session row (inserted in
+				// step 4) and any plan rows already inserted in this transaction.
+				// No manual cleanup is needed — InnoDB handles all of it.
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 				$wpdb->query( 'ROLLBACK' );
 				return new \WP_Error(
@@ -354,8 +360,8 @@ class Konx_Migration_Execution_Plan {
 	 * failure. This guard prevents create_snapshot() from proceeding on a
 	 * non-transactional table.
 	 *
-	 * This check runs BEFORE the draft session insert and BEFORE START TRANSACTION
-	 * so that no DB rows are created when the invariant is violated.
+	 * This check runs BEFORE START TRANSACTION so that no DB rows are created
+	 * when the invariant is violated.
 	 *
 	 * It is intentionally independent of upgrade_to_141() — installer success
 	 * must not be blindly assumed.
