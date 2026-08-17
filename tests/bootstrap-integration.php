@@ -21,7 +21,7 @@
 // ---------------------------------------------------------------------------
 define( 'ABSPATH', __DIR__ . '/' );
 define( 'KONX_AFFILIATE_VERSION', '1.15.0' );
-define( 'KONX_AFFILIATE_DB_VERSION', '1.3.0' );
+define( 'KONX_AFFILIATE_DB_VERSION', '1.4.1' );
 if ( ! defined( 'OBJECT' ) ) {
 	define( 'OBJECT', 'OBJECT' );
 }
@@ -51,6 +51,123 @@ if ( ! class_exists( 'WP_Error' ) ) {
 
 function is_wp_error( $thing ) {
 	return $thing instanceof WP_Error;
+}
+
+// ---------------------------------------------------------------------------
+// WordPress options API stubs — required for FMP parity check in revalidator.
+// ---------------------------------------------------------------------------
+
+/**
+ * Unserialize a value only if it was serialized.
+ * Mirrors WordPress's maybe_unserialize() for use in tests.
+ */
+if ( ! function_exists( 'maybe_unserialize' ) ) {
+	function maybe_unserialize( $data ) {
+		if ( ! is_string( $data ) ) {
+			return $data;
+		}
+		// Only attempt unserialization on strings that look serialized.
+		// PHP serialized strings begin with a type letter followed by ':'.
+		$trimmed = trim( $data );
+		if ( in_array( substr( $trimmed, 0, 2 ), array( 'a:', 'O:', 's:', 'b:', 'i:', 'd:', 'N;' ), true ) || 'b:0;' === $trimmed ) {
+			$unserialized = @unserialize( $trimmed ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			if ( false !== $unserialized || 'b:0;' === $trimmed ) {
+				return $unserialized;
+			}
+		}
+		return $data;
+	}
+}
+
+/**
+ * Sentinel value used by test_remove_option() to signal that get_option()
+ * should return the caller-supplied $default rather than any stored value.
+ * This lets tests simulate a missing option without touching the real DB.
+ */
+if ( ! defined( 'TEST_OPTION_NOT_SET' ) ) {
+	define( 'TEST_OPTION_NOT_SET', '__konx_test_option_not_set_sentinel_24c6c__' );
+}
+
+/**
+ * Per-test option overrides.  Keys are option names, values are override
+ * payloads.  When a key is present in this array, get_option() returns the
+ * override value instead of reading from the database.  A value equal to
+ * TEST_OPTION_NOT_SET causes get_option() to return $default (simulating a
+ * missing option without deleting anything from wp_options).
+ *
+ * @var array<string, mixed>
+ */
+$_test_option_overrides = array();
+
+/**
+ * Install a per-test option override.
+ *
+ * @param string $option Option name.
+ * @param mixed  $value  Override value returned by get_option().
+ */
+function test_set_option_override( $option, $value ) {
+	global $_test_option_overrides;
+	$_test_option_overrides[ $option ] = $value;
+}
+
+/**
+ * Simulate a missing option without touching the database.
+ * get_option( $option, $default ) will return $default.
+ *
+ * @param string $option Option name.
+ */
+function test_remove_option( $option ) {
+	global $_test_option_overrides;
+	$_test_option_overrides[ $option ] = TEST_OPTION_NOT_SET;
+}
+
+/**
+ * Remove the per-test override for $option.
+ * Subsequent calls to get_option() will read from the real database.
+ *
+ * @param string $option Option name.
+ */
+function test_clear_option_override( $option ) {
+	global $_test_option_overrides;
+	unset( $_test_option_overrides[ $option ] );
+}
+
+/**
+ * Read a WordPress option from wp_options via the test $wpdb connection.
+ * Returns $default if the option does not exist.
+ *
+ * Checks $_test_option_overrides first so individual tests can control what
+ * the FMP parity check sees without touching the real wp_options table.
+ * This is required so that the FMP parity check in
+ * Konx_Migration_Revalidator::check_plan_hash() can verify the live
+ * Final Migration Plan against the frozen plan hash.
+ */
+if ( ! function_exists( 'get_option' ) ) {
+	function get_option( $option, $default = false ) {
+		global $wpdb, $_test_option_overrides;
+
+		// Check per-test overrides first.
+		if ( array_key_exists( $option, $_test_option_overrides ) ) {
+			$val = $_test_option_overrides[ $option ];
+			// TEST_OPTION_NOT_SET simulates a missing option → return $default.
+			if ( TEST_OPTION_NOT_SET === $val ) {
+				return $default;
+			}
+			return $val;
+		}
+
+		// Fall through to the real database.
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT option_value FROM {$wpdb->options} WHERE option_name = %s LIMIT 1",
+				$option
+			)
+		);
+		if ( null === $row ) {
+			return $default;
+		}
+		return maybe_unserialize( $row->option_value );
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -265,6 +382,7 @@ require_once $includes . 'class-konx-migration-plan-hasher.php';
 require_once $includes . 'class-konx-migration-exec-session.php';
 require_once $includes . 'class-konx-migration-execution-ledger.php';
 require_once $includes . 'class-konx-migration-execution-plan.php';
+require_once $includes . 'class-konx-migration-revalidator.php';
 
 echo "[BOOTSTRAP] Integration test environment ready.\n";
 echo "[BOOTSTRAP] DB: konx.world | Tables: exec_sessions, execution_plan, execution_ledger\n\n";

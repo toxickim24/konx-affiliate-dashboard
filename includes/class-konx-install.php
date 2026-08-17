@@ -524,12 +524,16 @@ class Konx_Install {
 			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			started_at datetime DEFAULT NULL,
 			completed_at datetime DEFAULT NULL,
+			last_revalidated_at datetime DEFAULT NULL,
+			revalidation_status varchar(20) DEFAULT NULL,
+			revalidation_stale_count int(10) unsigned NOT NULL DEFAULT 0,
+			revalidation_conflict_count int(10) unsigned NOT NULL DEFAULT 0,
 			PRIMARY KEY  (id),
 			UNIQUE KEY uq_session_uuid (session_uuid),
 			KEY idx_status (status),
 			KEY idx_final_plan_hash (final_plan_hash),
 			KEY idx_created_by (created_by)
-		) {$charset_collate};";
+		) {$charset_collate} ENGINE=InnoDB;";
 
 		// ---------------------------------------------------------------
 		// Table 17: Migration Execution Plan (Phase 24C-6B)
@@ -561,7 +565,7 @@ class Konx_Install {
 			KEY idx_source_record_id (source_record_id),
 			KEY idx_action (action),
 			KEY idx_source_email (source_email)
-		) {$charset_collate};";
+		) {$charset_collate} ENGINE=InnoDB;";
 
 		// ---------------------------------------------------------------
 		// Table 18: Migration Execution Ledger (Phase 24C-6B)
@@ -604,8 +608,9 @@ class Konx_Install {
 			KEY idx_session_id (session_id),
 			KEY idx_plan_id (plan_id),
 			KEY idx_status (status),
-			KEY idx_source_record_id (source_record_id)
-		) {$charset_collate};";
+			KEY idx_source_record_id (source_record_id),
+			KEY idx_cross_session (source_record_id,source_system,status)
+		) {$charset_collate} ENGINE=InnoDB;";
 
 		return $tables;
 	}
@@ -704,6 +709,14 @@ class Konx_Install {
 		// 1.3.0: Execution foundation tables (exec_sessions, execution_plan, execution_ledger)
 		//        — handled by create_tables() via dbDelta(). No data migrations required.
 
+		if ( version_compare( $installed_version, '1.4.0', '<' ) ) {
+			self::upgrade_to_140();
+		}
+
+		if ( version_compare( $installed_version, '1.4.1', '<' ) ) {
+			self::upgrade_to_141();
+		}
+
 		self::create_tables();
 		update_option( 'konx_affiliate_db_version', KONX_AFFILIATE_DB_VERSION );
 	}
@@ -742,6 +755,157 @@ class Konx_Install {
 		if ( empty( $referral_settings['cookie_days'] ) || 30 === (int) $referral_settings['cookie_days'] ) {
 			$referral_settings['cookie_days'] = 90;
 			update_option( 'konx_referral_settings', $referral_settings );
+		}
+	}
+
+	/**
+	 * Upgrade to database version 1.4.0.
+	 *
+	 * Changes:
+	 * - Add composite index idx_cross_session (source_record_id, source_system, status)
+	 *   to wp_konx_migration_execution_ledger for efficient cross-session idempotency
+	 *   queries in the revalidation engine.
+	 * - Add revalidation tracking columns to wp_konx_migration_exec_sessions:
+	 *   last_revalidated_at, revalidation_status, revalidation_stale_count,
+	 *   revalidation_conflict_count.
+	 *
+	 * New columns are handled by dbDelta() via create_tables(). The index addition
+	 * is handled explicitly here because dbDelta does not reliably add indexes to
+	 * existing tables in all MySQL versions. The column additions via ALTER TABLE
+	 * here are a belt-and-suspenders fallback in case dbDelta is unavailable.
+	 */
+	private static function upgrade_to_140() {
+		global $wpdb;
+
+		$ledger_table  = $wpdb->prefix . 'konx_migration_execution_ledger';
+		$session_table = $wpdb->prefix . 'konx_migration_exec_sessions';
+
+		// Add composite index for cross-session idempotency (if not already present).
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$idx_exists = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM information_schema.STATISTICS
+				 WHERE TABLE_SCHEMA = DATABASE()
+				   AND TABLE_NAME = %s
+				   AND INDEX_NAME = 'idx_cross_session'",
+				$ledger_table
+			)
+		);
+
+		if ( ! $idx_exists ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$wpdb->query( "ALTER TABLE {$ledger_table} ADD INDEX idx_cross_session (source_record_id, source_system, status)" );
+		}
+
+		// Add revalidation tracking columns to exec_sessions (if not already present).
+		$revalidation_columns = array(
+			'last_revalidated_at'         => "ALTER TABLE {$session_table} ADD COLUMN last_revalidated_at datetime DEFAULT NULL",
+			'revalidation_status'         => "ALTER TABLE {$session_table} ADD COLUMN revalidation_status varchar(20) DEFAULT NULL",
+			'revalidation_stale_count'    => "ALTER TABLE {$session_table} ADD COLUMN revalidation_stale_count int(10) unsigned NOT NULL DEFAULT 0",
+			'revalidation_conflict_count' => "ALTER TABLE {$session_table} ADD COLUMN revalidation_conflict_count int(10) unsigned NOT NULL DEFAULT 0",
+		);
+
+		foreach ( $revalidation_columns as $col_name => $alter_sql ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$col_exists = $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT COUNT(*) FROM information_schema.COLUMNS
+					 WHERE TABLE_SCHEMA = DATABASE()
+					   AND TABLE_NAME = %s
+					   AND COLUMN_NAME = %s",
+					$session_table,
+					$col_name
+				)
+			);
+
+			if ( ! $col_exists ) {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+				$wpdb->query( $alter_sql );
+			}
+		}
+	}
+
+	/**
+	 * Upgrade to database version 1.4.1.
+	 *
+	 * Changes:
+	 * - Convert the three migration metadata tables to InnoDB storage engine:
+	 *     wp_konx_migration_exec_sessions
+	 *     wp_konx_migration_execution_plan
+	 *     wp_konx_migration_execution_ledger
+	 *
+	 * InnoDB is required for transactional snapshot creation (START TRANSACTION /
+	 * COMMIT / ROLLBACK). MyISAM does not support transactions. New installations
+	 * will receive InnoDB directly from the CREATE TABLE statement (via 1.4.1
+	 * schema). Existing 1.4.0 installations that used dbDelta (which may have
+	 * defaulted to MyISAM) are converted here.
+	 *
+	 * Guard conditions:
+	 *   1. InnoDB must be available on this server (SHOW ENGINES check).
+	 *   2. Each table is only converted if it exists and is NOT already InnoDB.
+	 *   3. Never hard-codes the 'wp_' prefix — always uses $wpdb->prefix.
+	 */
+	private static function upgrade_to_141() {
+		global $wpdb;
+
+		// Step 1: Verify InnoDB is available on this server.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$engines = $wpdb->get_results( 'SHOW ENGINES', ARRAY_A );
+
+		$innodb_available = false;
+		if ( is_array( $engines ) ) {
+			foreach ( $engines as $engine ) {
+				if (
+					isset( $engine['Engine'], $engine['Support'] ) &&
+					'InnoDB' === $engine['Engine'] &&
+					in_array( $engine['Support'], array( 'YES', 'DEFAULT' ), true )
+				) {
+					$innodb_available = true;
+					break;
+				}
+			}
+		}
+
+		if ( ! $innodb_available ) {
+			error_log( 'KonX Affiliate Dashboard: InnoDB not available on this server. Migration metadata tables will remain in their current storage engine. Upgrade to 1.4.1 skipped.' );
+			return;
+		}
+
+		// Step 2: Convert each of the three migration metadata tables to InnoDB
+		// if the table exists and is not already using InnoDB.
+		$tables_to_convert = array(
+			$wpdb->prefix . 'konx_migration_exec_sessions',
+			$wpdb->prefix . 'konx_migration_execution_plan',
+			$wpdb->prefix . 'konx_migration_execution_ledger',
+		);
+
+		foreach ( $tables_to_convert as $table_name ) {
+			// Check if the table exists and get its current engine.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$table_status = $wpdb->get_row(
+				$wpdb->prepare(
+					'SHOW TABLE STATUS WHERE Name = %s',
+					$table_name
+				)
+			);
+
+			if ( ! $table_status ) {
+				// Table does not exist — will be created by create_tables() below.
+				continue;
+			}
+
+			if ( 'InnoDB' === $table_status->Engine ) {
+				// Already InnoDB — no action needed.
+				continue;
+			}
+
+			// Convert to InnoDB.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$result = $wpdb->query( "ALTER TABLE `{$table_name}` ENGINE=InnoDB" );
+
+			if ( false === $result ) {
+				error_log( "KonX Affiliate Dashboard: Failed to convert {$table_name} to InnoDB. Error: " . $wpdb->last_error );
+			}
 		}
 	}
 }

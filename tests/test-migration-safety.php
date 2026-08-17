@@ -216,7 +216,7 @@ safety_assert_true( 'INSTALL: 1.3.0 comment present', strpos( $installer_content
 $main_file = dirname( __DIR__ ) . '/konx-affiliate-dashboard.php';
 // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 $main_content = file_get_contents( $main_file );
-safety_assert_true( 'VERSION: KONX_AFFILIATE_DB_VERSION = 1.3.0', strpos( $main_content, "'1.3.0'" ) !== false );
+safety_assert_true( 'VERSION: KONX_AFFILIATE_DB_VERSION = 1.4.1', strpos( $main_content, "'1.4.1'" ) !== false );
 
 // Verify plugin version unchanged at 1.15.0.
 safety_assert_true( 'VERSION: Plugin version unchanged at 1.15.0', strpos( $main_content, "'1.15.0'" ) !== false );
