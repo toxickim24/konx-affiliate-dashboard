@@ -130,7 +130,7 @@ class Konx_Install {
 	}
 
 	/**
-	 * Return the CREATE TABLE SQL for all 15 custom tables.
+	 * Return the CREATE TABLE SQL for all 18 custom tables.
 	 *
 	 * @param string $charset_collate The charset/collate string from $wpdb.
 	 * @return array Array of SQL CREATE TABLE statements.
@@ -487,6 +487,126 @@ class Konx_Install {
 			KEY idx_created_affiliate_id (created_affiliate_id)
 		) {$charset_collate};";
 
+		// ---------------------------------------------------------------
+		// Table 16: Migration Execution Sessions (Phase 24C-6B)
+		//
+		// Immutable execution sessions. Each session is a frozen snapshot
+		// of the Final Migration Plan at the moment of approval. Once a
+		// session reaches 'frozen' status, its identity fields (plan hash,
+		// record counts, plugin/schema version) must not be changed.
+		// ---------------------------------------------------------------
+		$table = $wpdb->prefix . 'konx_migration_exec_sessions';
+		$tables[] = "CREATE TABLE {$table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			session_uuid varchar(50) NOT NULL,
+			source_type varchar(20) NOT NULL DEFAULT 'csv',
+			source_filename varchar(255) DEFAULT NULL,
+			source_hash varchar(64) DEFAULT NULL,
+			source_hash_algorithm varchar(10) NOT NULL DEFAULT 'sha256',
+			final_plan_hash varchar(64) NOT NULL,
+			final_plan_record_count int(10) unsigned NOT NULL DEFAULT 0,
+			decision_create_count int(10) unsigned NOT NULL DEFAULT 0,
+			decision_link_wp_count int(10) unsigned NOT NULL DEFAULT 0,
+			decision_link_ca_count int(10) unsigned NOT NULL DEFAULT 0,
+			decision_invalid_count int(10) unsigned NOT NULL DEFAULT 0,
+			decision_review_count int(10) unsigned NOT NULL DEFAULT 0,
+			plugin_version varchar(20) NOT NULL DEFAULT '',
+			database_schema_version varchar(20) NOT NULL DEFAULT '',
+			status varchar(20) NOT NULL DEFAULT 'draft',
+			created_by bigint(20) unsigned DEFAULT NULL,
+			approved_by bigint(20) unsigned DEFAULT NULL,
+			approved_at datetime DEFAULT NULL,
+			executed_by bigint(20) unsigned DEFAULT NULL,
+			rollback_by bigint(20) unsigned DEFAULT NULL,
+			validation_timestamp datetime DEFAULT NULL,
+			dry_run_timestamp datetime DEFAULT NULL,
+			backup_reference varchar(100) DEFAULT NULL,
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			started_at datetime DEFAULT NULL,
+			completed_at datetime DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY uq_session_uuid (session_uuid),
+			KEY idx_status (status),
+			KEY idx_final_plan_hash (final_plan_hash),
+			KEY idx_created_by (created_by)
+		) {$charset_collate};";
+
+		// ---------------------------------------------------------------
+		// Table 17: Migration Execution Plan (Phase 24C-6B)
+		//
+		// Per-record frozen snapshot of the Final Migration Plan.
+		// Each row captures the approved action and all decision context
+		// required for safe, deterministic execution. The executor reads
+		// only from this table — it never re-runs matching or reconciliation.
+		// ---------------------------------------------------------------
+		$table = $wpdb->prefix . 'konx_migration_execution_plan';
+		$tables[] = "CREATE TABLE {$table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			session_id bigint(20) unsigned NOT NULL,
+			source_system varchar(20) NOT NULL DEFAULT 'powerof10',
+			source_record_id int(10) unsigned NOT NULL,
+			source_email varchar(255) NOT NULL DEFAULT '',
+			action varchar(20) NOT NULL,
+			wp_user_id bigint(20) unsigned DEFAULT NULL,
+			coupon_affiliate_id int(10) unsigned DEFAULT NULL,
+			affiliate_type varchar(20) NOT NULL DEFAULT 'sales_agent',
+			team_name varchar(50) DEFAULT NULL,
+			sponsor_team_name varchar(50) DEFAULT NULL,
+			source_payload text DEFAULT NULL,
+			decision_payload text DEFAULT NULL,
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY  (id),
+			UNIQUE KEY uq_session_source (session_id,source_record_id),
+			KEY idx_session_id (session_id),
+			KEY idx_source_record_id (source_record_id),
+			KEY idx_action (action),
+			KEY idx_source_email (source_email)
+		) {$charset_collate};";
+
+		// ---------------------------------------------------------------
+		// Table 18: Migration Execution Ledger (Phase 24C-6B)
+		//
+		// Per-record execution state. Tracks the lifecycle of each
+		// migration record through: pending → processing → completed /
+		// failed / skipped / rolled_back.
+		//
+		// IDEMPOTENCY: UNIQUE KEY uq_session_source prevents duplicate
+		// execution entries per record per session. Cross-session
+		// idempotency (blocking re-migration of completed records) is
+		// enforced at execution time by the revalidation engine, NOT by
+		// a global UNIQUE constraint, to allow failed sessions to be retried.
+		// ---------------------------------------------------------------
+		$table = $wpdb->prefix . 'konx_migration_execution_ledger';
+		$tables[] = "CREATE TABLE {$table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			session_id bigint(20) unsigned NOT NULL,
+			plan_id bigint(20) unsigned NOT NULL,
+			source_system varchar(20) NOT NULL DEFAULT 'powerof10',
+			source_record_id int(10) unsigned NOT NULL,
+			approved_action varchar(20) NOT NULL,
+			status varchar(20) NOT NULL DEFAULT 'pending',
+			attempt_count int(10) unsigned NOT NULL DEFAULT 0,
+			wp_user_id bigint(20) unsigned DEFAULT NULL,
+			wp_user_created tinyint(1) NOT NULL DEFAULT 0,
+			affiliate_id bigint(20) unsigned DEFAULT NULL,
+			affiliate_created tinyint(1) NOT NULL DEFAULT 0,
+			error_code varchar(50) DEFAULT NULL,
+			error_message varchar(500) DEFAULT NULL,
+			started_at datetime DEFAULT NULL,
+			completed_at datetime DEFAULT NULL,
+			rollback_status varchar(20) DEFAULT NULL,
+			rolled_back_at datetime DEFAULT NULL,
+			rolled_back_by bigint(20) unsigned DEFAULT NULL,
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at datetime DEFAULT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY uq_session_source (session_id,source_record_id),
+			KEY idx_session_id (session_id),
+			KEY idx_plan_id (plan_id),
+			KEY idx_status (status),
+			KEY idx_source_record_id (source_record_id)
+		) {$charset_collate};";
+
 		return $tables;
 	}
 
@@ -580,6 +700,9 @@ class Konx_Install {
 		}
 
 		// 1.2.0: Migration sessions + log tables — handled by create_tables() via dbDelta().
+
+		// 1.3.0: Execution foundation tables (exec_sessions, execution_plan, execution_ledger)
+		//        — handled by create_tables() via dbDelta(). No data migrations required.
 
 		self::create_tables();
 		update_option( 'konx_affiliate_db_version', KONX_AFFILIATE_DB_VERSION );
