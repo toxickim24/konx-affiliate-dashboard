@@ -73,11 +73,13 @@ class Konx_Migration_Execution_Plan {
 	 * This is the primary entry point for Phase 24C-6B. It:
 	 *   1. Validates the FMP decisions array and expected counts.
 	 *   2. Computes the source hash and plan hash.
-	 *   3. Creates an exec_session row (draft).
-	 *   4. Inserts all FMP records into the plan snapshot table.
-	 *   5. Inserts pending ledger rows for actionable records.
-	 *   6. Freezes the session (transitions draft → frozen).
-	 *   7. Returns the session UUID and summary.
+	 *   3. Verifies all migration metadata tables are InnoDB.
+	 *   4. Opens a transaction covering all metadata writes.
+	 *   5. Creates an exec_session row (draft) inside the transaction.
+	 *   6. Inserts all FMP records into the plan snapshot table.
+	 *   7. Inserts pending ledger rows for actionable records.
+	 *   8. Freezes the session (transitions draft → frozen).
+	 *   9. Commits the transaction and returns the session UUID and summary.
 	 *
 	 * SAFETY: Does NOT create WP users. Does NOT create KonX affiliates.
 	 * Does NOT trigger the executor. Does NOT modify production data.
@@ -122,7 +124,43 @@ class Konx_Migration_Execution_Plan {
 			? sanitize_text_field( $options['source_hash'] )
 			: null;
 
-		// 3. Create exec session (draft).
+		// 3. Pre-flight: verify migration metadata tables are InnoDB.
+		//
+		// create_snapshot() relies on START TRANSACTION / COMMIT / ROLLBACK for
+		// atomic metadata writes. MyISAM silently ignores these statements, so
+		// partial state could persist on failure. This check must run BEFORE
+		// START TRANSACTION so that a non-InnoDB table is detected before any
+		// rows are created.
+		//
+		// This guard is independent of upgrade_to_141() — the installer cannot be
+		// assumed to have run successfully on every environment.
+		$innodb_check = self::require_innodb_metadata_tables();
+		if ( is_wp_error( $innodb_check ) ) {
+			return $innodb_check;
+		}
+
+		// ------------------------------------------------------------------
+		// TRANSACTION SCOPE
+		//
+		// START TRANSACTION covers ALL four metadata write operations:
+		//   - wp_konx_migration_exec_sessions   (draft session + freeze transition)
+		//   - wp_konx_migration_execution_plan  (plan snapshot records)
+		//   - wp_konx_migration_execution_ledger (pending ledger rows)
+		//
+		// The draft session INSERT is inside the transaction. If any subsequent
+		// operation fails, ROLLBACK removes the session row, all plan rows, and
+		// all ledger rows atomically — no orphan draft sessions can survive a
+		// failed snapshot attempt.
+		//
+		// Business data (WP users, KonX affiliates, Coupon Affiliate registers,
+		// WP posts) is NOT written here — these tables are only touched by
+		// the executor, which runs in a separate, later phase.
+		// ------------------------------------------------------------------
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$wpdb->query( 'START TRANSACTION' );
+
+		// 4. Create exec session (draft) — inside the transaction so a ROLLBACK
+		// on any subsequent failure removes the session row with no orphan.
 		$session_result = Konx_Migration_Exec_Session::create(
 			array(
 				'source_type'             => 'csv',
@@ -143,13 +181,15 @@ class Konx_Migration_Execution_Plan {
 		);
 
 		if ( is_wp_error( $session_result ) ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$wpdb->query( 'ROLLBACK' );
 			return $session_result;
 		}
 
 		$session_uuid = $session_result['session_uuid'];
 		$session_id   = $session_result['id'];
 
-		// 4. Insert plan snapshot records (batch insert for efficiency).
+		// 5. Insert plan snapshot records (batch insert for efficiency).
 		$plan_table    = $wpdb->prefix . self::TABLE;
 		$ledger_table  = $wpdb->prefix . Konx_Migration_Execution_Ledger::TABLE;
 		$plan_records  = 0;
@@ -219,13 +259,16 @@ class Konx_Migration_Execution_Plan {
 			);
 
 			if ( false === $inserted ) {
-				// Roll back session and any partial plan records on insert failure.
-				self::cleanup_failed_snapshot( $session_uuid, $session_id );
+				// ROLLBACK atomically removes the draft session row (inserted in
+				// step 4) and any plan rows already inserted in this transaction.
+				// No manual cleanup is needed — InnoDB handles all of it.
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+				$wpdb->query( 'ROLLBACK' );
 				return new \WP_Error(
 					'plan_insert_failed',
 					sprintf(
 						/* translators: %d: PO10 record ID */
-						__( 'Failed to insert plan record for PO10 ID %d.', 'konx-affiliate-dashboard' ),
+						__( 'Failed to insert plan record for PO10 ID %d. Transaction rolled back.', 'konx-affiliate-dashboard' ),
 						$po10_id
 					)
 				);
@@ -234,7 +277,7 @@ class Konx_Migration_Execution_Plan {
 			$plan_record_id = (int) $wpdb->insert_id;
 			$plan_records++;
 
-			// 5. Insert pending ledger rows for actionable records only.
+			// 6. Insert pending ledger rows for actionable records only.
 			if ( in_array( $action, $actionable_actions, true ) ) {
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 				$ledger_inserted = $wpdb->insert(
@@ -255,12 +298,14 @@ class Konx_Migration_Execution_Plan {
 				if ( false === $ledger_inserted ) {
 					// A missing ledger row for an actionable record is fatal: the executor
 					// needs both the plan row and the ledger row to operate correctly.
-					self::cleanup_failed_snapshot( $session_uuid, $session_id );
+					// ROLLBACK removes everything inserted in this transaction.
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+					$wpdb->query( 'ROLLBACK' );
 					return new \WP_Error(
 						'ledger_insert_failed',
 						sprintf(
 							/* translators: %d: PO10 record ID */
-							__( 'Failed to insert ledger record for PO10 ID %d.', 'konx-affiliate-dashboard' ),
+							__( 'Failed to insert ledger record for PO10 ID %d. Transaction rolled back.', 'konx-affiliate-dashboard' ),
 							$po10_id
 						)
 					);
@@ -270,21 +315,27 @@ class Konx_Migration_Execution_Plan {
 			}
 		}
 
-		// 6. Freeze the session (draft → frozen).
+		// 7. Freeze the session (draft → frozen).
 		$freeze_result = Konx_Migration_Exec_Session::freeze( $session_uuid );
 		if ( is_wp_error( $freeze_result ) ) {
-			// A successful snapshot MUST be frozen. If freeze fails, clean up and
-			// surface the error so the caller knows the snapshot was not committed.
-			self::cleanup_failed_snapshot( $session_uuid, $session_id );
+			// A successful snapshot MUST be frozen. If freeze fails, roll back the
+			// entire transaction so no partial state remains.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$wpdb->query( 'ROLLBACK' );
 			return new \WP_Error(
 				'snapshot_freeze_failed',
 				sprintf(
 					/* translators: %s: upstream error message */
-					__( 'Snapshot creation failed: could not freeze session. %s', 'konx-affiliate-dashboard' ),
+					__( 'Snapshot creation failed: could not freeze session. %s Transaction rolled back.', 'konx-affiliate-dashboard' ),
 					$freeze_result->get_error_message()
 				)
 			);
 		}
+
+		// All metadata rows are consistent — commit the transaction.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$wpdb->query( 'COMMIT' );
+		// END TRANSACTION SCOPE — business data is never written inside this block.
 
 		return array(
 			'session_uuid'    => $session_uuid,
@@ -294,6 +345,69 @@ class Konx_Migration_Execution_Plan {
 			'ledger_records'  => $ledger_records,
 			'decision_counts' => $decision_counts,
 		);
+	}
+
+	// ------------------------------------------------------------------
+	// Snapshot Pre-flight Helpers
+	// ------------------------------------------------------------------
+
+	/**
+	 * Verify that all three migration metadata tables use InnoDB.
+	 *
+	 * create_snapshot() relies on START TRANSACTION / COMMIT / ROLLBACK for
+	 * atomicity. MyISAM silently ignores these statements, which means partial
+	 * snapshot state (orphan plan rows, orphan ledger rows) would persist on
+	 * failure. This guard prevents create_snapshot() from proceeding on a
+	 * non-transactional table.
+	 *
+	 * This check runs BEFORE START TRANSACTION so that no DB rows are created
+	 * when the invariant is violated.
+	 *
+	 * It is intentionally independent of upgrade_to_141() — installer success
+	 * must not be blindly assumed.
+	 *
+	 * @return true|\WP_Error True if all three tables are InnoDB; WP_Error otherwise.
+	 */
+	private static function require_innodb_metadata_tables() {
+		global $wpdb;
+
+		$required_tables = array(
+			$wpdb->prefix . Konx_Migration_Exec_Session::TABLE,
+			$wpdb->prefix . self::TABLE,
+			$wpdb->prefix . Konx_Migration_Execution_Ledger::TABLE,
+		);
+
+		foreach ( $required_tables as $table_name ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$status = $wpdb->get_row(
+				$wpdb->prepare( 'SHOW TABLE STATUS WHERE Name = %s', $table_name )
+			);
+
+			if ( ! $status ) {
+				return new \WP_Error(
+					'migration_metadata_not_transactional',
+					sprintf(
+						/* translators: %s: table name */
+						__( 'Migration metadata table "%s" does not exist. Run the plugin installer before creating a snapshot.', 'konx-affiliate-dashboard' ),
+						$table_name
+					)
+				);
+			}
+
+			if ( 'InnoDB' !== $status->Engine ) {
+				return new \WP_Error(
+					'migration_metadata_not_transactional',
+					sprintf(
+						/* translators: 1: table name, 2: actual engine name */
+						__( 'Migration metadata table "%1$s" uses %2$s storage engine (InnoDB required). Transactions are not supported on this table. Run the 1.4.1 schema upgrade before creating a snapshot.', 'konx-affiliate-dashboard' ),
+						$table_name,
+						$status->Engine
+					)
+				);
+			}
+		}
+
+		return true;
 	}
 
 	// ------------------------------------------------------------------
@@ -401,7 +515,13 @@ class Konx_Migration_Execution_Plan {
 
 	/**
 	 * Clean up a failed snapshot by removing plan + ledger rows and
-	 * invalidating the session. Used only on snapshot creation failure.
+	 * invalidating the session.
+	 *
+	 * NOTE: This method is retained for defensive purposes (e.g., failures
+	 * that occur before the START TRANSACTION, or in non-transactional
+	 * contexts). Failures INSIDE the create_snapshot() transaction are
+	 * handled by ROLLBACK, which atomically removes all rows inserted in
+	 * that transaction — this method is NOT called for those cases.
 	 *
 	 * @param string $session_uuid UUID of the failed session.
 	 * @param int    $session_id   Row ID of the failed session.

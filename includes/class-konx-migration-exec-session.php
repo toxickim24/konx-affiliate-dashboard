@@ -432,6 +432,45 @@ class Konx_Migration_Exec_Session {
 	}
 
 	/**
+	 * Persist the result of a revalidation run to the session row.
+	 *
+	 * Updates the four revalidation tracking columns added in DB 1.4.0.
+	 * Only updates — does NOT change the session status. A frozen session
+	 * remains frozen regardless of revalidation outcome.
+	 *
+	 * @param string $session_uuid        UUID of the session.
+	 * @param array  $revalidation_result Result from Konx_Migration_Revalidator::revalidate().
+	 * @return true|WP_Error True on success.
+	 */
+	public static function persist_revalidation_result( $session_uuid, array $revalidation_result ) {
+		global $wpdb;
+
+		$table = $wpdb->prefix . self::TABLE;
+
+		$status = sanitize_text_field( $revalidation_result['revalidation_status'] ?? 'critical' );
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$result = $wpdb->update(
+			$table,
+			array(
+				'last_revalidated_at'          => current_time( 'mysql', true ),
+				'revalidation_status'          => $status,
+				'revalidation_stale_count'     => absint( $revalidation_result['records_stale'] ?? 0 ),
+				'revalidation_conflict_count'  => absint( $revalidation_result['records_conflict'] ?? 0 ),
+			),
+			array( 'session_uuid' => $session_uuid ),
+			array( '%s', '%s', '%d', '%d' ),
+			array( '%s' )
+		);
+
+		if ( false === $result ) {
+			return new \WP_Error( 'db_error', __( 'Failed to persist revalidation result.', 'konx-affiliate-dashboard' ) );
+		}
+
+		return true;
+	}
+
+	/**
 	 * Get valid session statuses.
 	 *
 	 * @return array

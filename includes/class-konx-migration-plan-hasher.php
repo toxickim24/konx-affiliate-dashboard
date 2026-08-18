@@ -105,16 +105,27 @@ class Konx_Migration_Plan_Hasher {
 	/**
 	 * Compute a deterministic SHA-256 hash of a Final Migration Plan.
 	 *
-	 * The input array is the decisions[] array from either:
-	 *   - $state['final_migration_plan']['decisions']
-	 *   - $state['decision_matrix']['decisions']
+	 * CANONICAL INPUT:
+	 *   For execution-snapshot creation and FMP parity verification, the
+	 *   input MUST be:
+	 *     $state['final_migration_plan']['decisions']
+	 *
+	 *   This is the post-validation artifact produced by
+	 *   build_final_migration_plan(). It differs from the Decision Matrix
+	 *   because validation errors override preliminary decisions (e.g.
+	 *   'review' entries may become 'invalid'). The two arrays are NOT
+	 *   equivalent and produce different hashes.
+	 *
+	 *   decision_matrix.decisions is a pre-validation intermediate. Do NOT
+	 *   supply it for snapshot creation or FMP parity checks — doing so
+	 *   produces a hash that will permanently disagree with the snapshot.
 	 *
 	 * The hash is stable as long as the set of (source_record_id, action,
 	 * affiliate_type, team_name, wp_user_id, coupon_affiliate_id) does not
 	 * change. Reordering the records in the input array does NOT change
 	 * the hash because they are sorted by source_record_id before encoding.
 	 *
-	 * @param array $decisions Array of decision records from the FMP.
+	 * @param array $decisions Decisions from $state['final_migration_plan']['decisions'].
 	 * @return string 64-char hex SHA-256 hash.
 	 */
 	public static function hash_final_plan( array $decisions ) {
@@ -181,6 +192,52 @@ class Konx_Migration_Plan_Hasher {
 		}
 
 		return $canonical;
+	}
+
+	/**
+	 * Compute a deterministic SHA-256 hash directly from frozen plan records.
+	 *
+	 * Used by the revalidation engine to verify snapshot integrity without
+	 * re-loading the source FMP. The plan records are already stored in
+	 * canonical form in the database, so this method reads them directly
+	 * rather than re-mapping from the FMP's intermediate representation.
+	 *
+	 * The resulting hash is identical to hash_final_plan() given the same data
+	 * because both canonicalize the same 7 fields in the same order.
+	 *
+	 * @param array $plan_records Array of plan record objects from
+	 *                            wp_konx_migration_execution_plan (via get_by_session()).
+	 * @return string 64-char hex SHA-256 hash.
+	 */
+	public static function hash_from_plan_records( array $plan_records ) {
+		// Sort ascending by source_record_id for order-independence.
+		usort(
+			$plan_records,
+			function ( $a, $b ) {
+				return (int) $a->source_record_id - (int) $b->source_record_id;
+			}
+		);
+
+		$canonical = array();
+
+		foreach ( $plan_records as $r ) {
+			$canonical[] = array(
+				'source_record_id'    => (int) $r->source_record_id,
+				'source_email'        => strtolower( trim( (string) $r->source_email ) ),
+				'action'              => (string) $r->action,
+				'affiliate_type'      => (string) $r->affiliate_type,
+				'team_name'           => trim( (string) ( $r->team_name ?? '' ) ),
+				'wp_user_id'          => null !== $r->wp_user_id
+					? (int) $r->wp_user_id
+					: null,
+				'coupon_affiliate_id' => null !== $r->coupon_affiliate_id
+					? (int) $r->coupon_affiliate_id
+					: null,
+			);
+		}
+
+		$json = json_encode( $canonical ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode
+		return hash( self::PLAN_HASH_ALGORITHM, (string) $json );
 	}
 
 	/**
