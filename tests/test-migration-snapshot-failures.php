@@ -156,6 +156,9 @@ $draft_result = Konx_Migration_Exec_Session::create( array(
 fail_assert_false( 'G1-T01: Manual draft session created', is_wp_error( $draft_result ) );
 $draft_uuid = $draft_result['session_uuid'] ?? null;
 $draft_id   = $draft_result['id'] ?? null;
+if ( $draft_uuid && $draft_id ) {
+	register_test_session( $draft_uuid, (int) $draft_id );
+}
 
 // Step 1b: Insert plan rows for this draft session.
 $wpdb->insert( $plan_t, array( 'session_id' => $draft_id, 'source_system' => 'powerof10', 'source_record_id' => 9901, 'source_email' => 'fr1@test.invalid', 'action' => 'create',   'created_at' => current_time( 'mysql', true ) ), array( '%d', '%s', '%d', '%s', '%s', '%s' ) );
@@ -209,14 +212,13 @@ if ( ! is_wp_error( $snap_check ) ) {
 	$sess_obj = Konx_Migration_Exec_Session::get( $snap_check['session_uuid'] );
 	fail_assert( 'G1-T12: Session status = frozen', 'frozen', $sess_obj->status ?? null );
 
-	// Cleanup.
-	$wpdb->delete( $plan_t,   array( 'session_id' => $snap_check['session_id'] ), array( '%d' ) );
-	$wpdb->delete( $ledger_t, array( 'session_id' => $snap_check['session_id'] ), array( '%d' ) );
-	$wpdb->delete( $ses_t,    array( 'id' => $snap_check['session_id'] ),         array( '%d' ) );
+	// Cleanup G1-T10 snapshot.
+	register_test_session( $snap_check['session_uuid'], $snap_check['session_id'] );
+	safe_cleanup_test_session( $snap_check['session_uuid'], $snap_check['session_id'] );
 }
 
-// Cleanup draft session row.
-$wpdb->delete( $ses_t, array( 'id' => $draft_id ), array( '%d' ) );
+// Cleanup draft session row (plan/ledger already deleted by test; this removes the session row).
+safe_cleanup_test_session( $draft_uuid, (int) $draft_id );
 
 // ===========================================================================
 // GROUP 2 — Ledger insert failure cleanup
@@ -262,6 +264,9 @@ $lf_result = Konx_Migration_Exec_Session::create( array(
 fail_assert_false( 'G2-T01: Ledger-failure test session created', is_wp_error( $lf_result ) );
 $lf_uuid = $lf_result['session_uuid'] ?? null;
 $lf_id   = $lf_result['id'] ?? null;
+if ( $lf_uuid && $lf_id ) {
+	register_test_session( $lf_uuid, (int) $lf_id );
+}
 
 // Insert 2 plan rows but only 1 ledger row (simulating failure after first actionable record).
 $wpdb->insert( $plan_t, array( 'session_id' => $lf_id, 'source_system' => 'powerof10', 'source_record_id' => 8801, 'source_email' => 'lf1@test.invalid', 'action' => 'create',  'created_at' => current_time( 'mysql', true ) ), array( '%d', '%s', '%d', '%s', '%s', '%s' ) );
@@ -299,8 +304,8 @@ $frozen_check = $wpdb->get_var(
 );
 fail_assert( 'G2-T09: No frozen session with this plan hash remains', 0, (int) $frozen_check );
 
-// Cleanup.
-$wpdb->delete( $ses_t, array( 'id' => $lf_id ), array( '%d' ) );
+// Cleanup G2 session row (plan/ledger already deleted by test).
+safe_cleanup_test_session( $lf_uuid, (int) $lf_id );
 
 // ===========================================================================
 // GROUP 3 — attempt_count increment: no NULL write, correct increment
@@ -335,6 +340,7 @@ fail_assert_false( 'G3-T01: Attempt-count test snapshot created', is_wp_error( $
 
 if ( ! is_wp_error( $ac_snap ) ) {
 	$ac_session_id = $ac_snap['session_id'];
+	register_test_session( $ac_snap['session_uuid'], $ac_session_id );
 
 	// Verify initial state: attempt_count = 0, status = pending.
 	$row0 = $wpdb->get_row(
@@ -378,10 +384,8 @@ if ( ! is_wp_error( $ac_snap ) ) {
 	);
 	fail_assert( 'G3-T10: attempt_count = 2 after second processing (0→1→2)', '2', (string) ( $row2->attempt_count ?? 'NULL' ) );
 
-	// Cleanup.
-	$wpdb->delete( $plan_t,   array( 'session_id' => $ac_session_id ), array( '%d' ) );
-	$wpdb->delete( $ledger_t, array( 'session_id' => $ac_session_id ), array( '%d' ) );
-	$wpdb->delete( $ses_t,    array( 'id' => $ac_session_id ),         array( '%d' ) );
+	// Cleanup G3 snapshot.
+	safe_cleanup_test_session( $ac_snap['session_uuid'], $ac_session_id );
 }
 
 // ===========================================================================
@@ -417,5 +421,8 @@ if ( $failures > 0 ) {
 	echo " ({$failures} FAILED)";
 }
 echo " ---\n\n";
+
+// Explicit teardown — also fires via shutdown handler on crash.
+teardown_all_test_sessions();
 
 exit( $failures > 0 ? 1 : 0 );

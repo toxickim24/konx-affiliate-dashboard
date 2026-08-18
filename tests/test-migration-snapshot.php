@@ -99,6 +99,7 @@ if ( is_wp_error( $snapshot ) ) {
 } else {
 	$session_uuid = $snapshot['session_uuid'];
 	$session_id   = $snapshot['session_id'];
+	register_test_session( $session_uuid, $session_id );
 
 	// --- Record counts ---
 
@@ -214,14 +215,10 @@ if ( is_wp_error( $snapshot ) ) {
 	$original_count = Konx_Migration_Execution_Plan::get_by_session( $session_id );
 	snap_assert( 'T17: Original plan records unchanged after second call', 7, count( $original_count ) );
 
-	// If a new session was created, clean it up.
+	// If a new session was created, register and clean it up via the safe helper.
 	if ( ! is_wp_error( $duplicate ) && isset( $duplicate['session_id'] ) && $duplicate['session_id'] !== $session_id ) {
-		$plan_t   = $wpdb->prefix . 'konx_migration_execution_plan';
-		$ledger_t = $wpdb->prefix . 'konx_migration_execution_ledger';
-		$ses_t    = $wpdb->prefix . 'konx_migration_exec_sessions';
-		$wpdb->delete( $plan_t,   array( 'session_id' => $duplicate['session_id'] ), array( '%d' ) );
-		$wpdb->delete( $ledger_t, array( 'session_id' => $duplicate['session_id'] ), array( '%d' ) );
-		$wpdb->delete( $ses_t,    array( 'id' => $duplicate['session_id'] ), array( '%d' ) );
+		register_test_session( $duplicate['session_uuid'], $duplicate['session_id'] );
+		safe_cleanup_test_session( $duplicate['session_uuid'], $duplicate['session_id'] );
 	}
 
 	// --- SAFETY: verify no business entities were created ---
@@ -238,13 +235,7 @@ if ( is_wp_error( $snapshot ) ) {
 
 	// --- Cleanup test data ---
 
-	$plan_table   = $wpdb->prefix . 'konx_migration_execution_plan';
-	$ledger_table = $wpdb->prefix . 'konx_migration_execution_ledger';
-	$ses_table    = $wpdb->prefix . 'konx_migration_exec_sessions';
-
-	$wpdb->delete( $plan_table,   array( 'session_id' => $session_id ), array( '%d' ) );
-	$wpdb->delete( $ledger_table, array( 'session_id' => $session_id ), array( '%d' ) );
-	$wpdb->delete( $ses_table,    array( 'id' => $session_id ), array( '%d' ) );
+	safe_cleanup_test_session( $session_uuid, $session_id );
 }
 
 // ---------------------------------------------------------------------------
@@ -270,3 +261,6 @@ if ( $failures > 0 ) {
 	echo " ({$failures} FAILED)";
 }
 echo " ---\n\n";
+
+// Explicit teardown — also fires via shutdown handler on crash.
+teardown_all_test_sessions();

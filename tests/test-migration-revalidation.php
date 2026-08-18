@@ -59,11 +59,15 @@ function get_frozen_session_uuid() {
 	);
 }
 
-// Create a minimal test snapshot and return the session UUID and ID.
+// Create a minimal test snapshot, auto-register it for teardown, and return
+// the session UUID and ID.
 function create_test_snapshot( array $decisions, array $opts = array() ) {
 	$result = Konx_Migration_Execution_Plan::create_snapshot( $decisions, $opts );
 	if ( is_wp_error( $result ) ) {
 		return null;
+	}
+	if ( ! empty( $result['session_uuid'] ) && ! empty( $result['session_id'] ) ) {
+		register_test_session( $result['session_uuid'], $result['session_id'] );
 	}
 	return $result;
 }
@@ -99,11 +103,10 @@ function revalidate_with_fmp_override( $session_uuid, array $decisions ) {
 }
 
 // Delete all traces of a test snapshot (plan, ledger, session).
+// Delegates to safe_cleanup_test_session() which runs atomically and
+// deregisters the UUID from the teardown registry on success.
 function cleanup_test_snapshot( $session_uuid, $session_id ) {
-	global $wpdb;
-	$wpdb->delete( $wpdb->prefix . 'konx_migration_execution_plan',   array( 'session_id' => $session_id ), array( '%d' ) );
-	$wpdb->delete( $wpdb->prefix . 'konx_migration_execution_ledger', array( 'session_id' => $session_id ), array( '%d' ) );
-	$wpdb->delete( $wpdb->prefix . 'konx_migration_exec_sessions',    array( 'session_uuid' => $session_uuid ), array( '%s' ) );
+	safe_cleanup_test_session( $session_uuid, (int) $session_id );
 }
 
 // Get a WP user that has NO KonX affiliate (safe to use as test subject).
@@ -189,6 +192,8 @@ if ( $_fmp_decisions ) {
 	if ( ! is_wp_error( $_live_fmp_snap ) && ! empty( $_live_fmp_snap['session_uuid'] ) ) {
 		$frozen_uuid       = $_live_fmp_snap['session_uuid'];
 		$_live_fmp_snap_id = $_live_fmp_snap['session_id'];
+		// Register so the shutdown handler can clean up on crash.
+		register_test_session( $frozen_uuid, $_live_fmp_snap_id );
 	} else {
 		// Creation failed — fall back to the pre-existing frozen session.
 		$frozen_uuid = get_frozen_session_uuid();
@@ -2378,3 +2383,9 @@ if ( 0 === $fail ) {
 } else {
 	echo "  PHASE 24C-6C REVALIDATION ENGINE: {$fail} TEST(S) FAILED — see [FAIL] lines above.\n\n";
 }
+
+// ---------------------------------------------------------------------------
+// Explicit teardown — clean any sessions still in the registry.
+// (The shutdown function also fires, making this doubly safe.)
+// ---------------------------------------------------------------------------
+teardown_all_test_sessions();
