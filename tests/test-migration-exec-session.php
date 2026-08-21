@@ -109,6 +109,7 @@ ses_assert_true(  'T04c: Returns id', ! empty( $created['id'] ) );
 
 $uuid = $created['session_uuid'];
 $sid  = $created['id'];
+register_test_session( $uuid, (int) $sid );
 
 ses_assert( 'T04d: UUID is 36 chars', 36, strlen( $uuid ) );
 ses_assert_true( 'T04e: UUID matches v4 pattern',
@@ -171,8 +172,9 @@ $created2 = Konx_Migration_Exec_Session::create( make_session_args( str_repeat( 
 ses_assert_false( 'T10: Second session no WP_Error', is_wp_error( $created2 ) );
 if ( ! is_wp_error( $created2 ) ) {
 	ses_assert_true( 'T10b: UUIDs differ', $uuid !== $created2['session_uuid'] );
-	// Cleanup second session.
-	$wpdb->delete( $wpdb->prefix . 'konx_migration_exec_sessions', array( 'id' => $created2['id'] ), array( '%d' ) );
+	register_test_session( $created2['session_uuid'], (int) $created2['id'] );
+	// Cleanup second session immediately (no plan/ledger rows).
+	safe_cleanup_test_session( $created2['session_uuid'], (int) $created2['id'] );
 }
 
 // ---------------------------------------------------------------------------
@@ -199,7 +201,8 @@ ses_assert( 'T13b: get_by_id() UUID matches', $uuid, $by_id->session_uuid ?? nul
 // ---------------------------------------------------------------------------
 // Cleanup.
 // ---------------------------------------------------------------------------
-$wpdb->delete( $wpdb->prefix . 'konx_migration_exec_sessions', array( 'id' => $sid ), array( '%d' ) );
+// $uuid was invalidated above (T11) but the row still exists — safe_cleanup deletes it.
+safe_cleanup_test_session( $uuid, (int) $sid );
 
 // ---------------------------------------------------------------------------
 // Results output.
@@ -218,4 +221,8 @@ $passed = $total - $failures;
 echo "\n--- Results: {$passed}/{$total} passed";
 if ( $failures > 0 ) { echo " ({$failures} FAILED)"; }
 echo " ---\n\n";
+
+// Explicit teardown — also fires via shutdown handler on crash.
+teardown_all_test_sessions();
+
 exit( $failures > 0 ? 1 : 0 );

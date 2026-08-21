@@ -390,5 +390,162 @@ require_once $includes . 'class-konx-migration-execution-ledger.php';
 require_once $includes . 'class-konx-migration-execution-plan.php';
 require_once $includes . 'class-konx-migration-revalidator.php';
 
+// ---------------------------------------------------------------------------
+// Canonical session protection — NEVER delete this session.
+// ---------------------------------------------------------------------------
+
+/**
+ * The UUID of the one real (non-test) migration snapshot.
+ * safe_cleanup_test_session() refuses to touch this UUID even if accidentally
+ * passed in.
+ */
+if ( ! defined( 'KONX_CANONICAL_SESSION_UUID' ) ) {
+	define( 'KONX_CANONICAL_SESSION_UUID', '395e2b79-1e0a-49e8-9ea6-1ae146c9a54d' );
+}
+
+// ---------------------------------------------------------------------------
+// UUID/session-ID tracking registry.
+// ---------------------------------------------------------------------------
+
+/**
+ * Registry of sessions created by the current test process.
+ * Keys are UUIDs (string), values are session IDs (int).
+ *
+ * @var array<string, int>
+ */
+$_konx_test_created_sessions = array();
+
+/**
+ * Record a session that was just created by a test.
+ *
+ * @param string $uuid       Session UUID.
+ * @param int    $session_id DB primary-key ID.
+ */
+function register_test_session( $uuid, $session_id ) {
+	global $_konx_test_created_sessions;
+	if ( KONX_CANONICAL_SESSION_UUID === $uuid ) {
+		return; // Never track the canonical session.
+	}
+	$_konx_test_created_sessions[ $uuid ] = (int) $session_id;
+}
+
+/**
+ * Remove a session from the registry (after successful cleanup).
+ *
+ * @param string $uuid Session UUID.
+ */
+function deregister_test_session( $uuid ) {
+	global $_konx_test_created_sessions;
+	unset( $_konx_test_created_sessions[ $uuid ] );
+}
+
+// ---------------------------------------------------------------------------
+// Safe cleanup helper (Step 5).
+// ---------------------------------------------------------------------------
+
+/**
+ * Atomically delete a test session and all its associated plan/ledger rows.
+ *
+ * Guards:
+ *  1. Refuses the canonical production UUID unconditionally.
+ *  2. Verifies the supplied ID and UUID identify the same DB row before deleting.
+ *  3. Wraps all three deletes in an InnoDB transaction; rolls back on any failure.
+ *  4. Deregisters the UUID from the tracking registry on success.
+ *
+ * Returns true on success (or if the session no longer exists), false on
+ * refusal / mismatch / DB error.
+ *
+ * @param string $uuid       Session UUID.
+ * @param int    $session_id DB primary-key ID.
+ * @return bool
+ */
+function safe_cleanup_test_session( $uuid, $session_id ) {
+	global $wpdb;
+
+	// Guard 1: never touch the canonical session.
+	if ( KONX_CANONICAL_SESSION_UUID === $uuid ) {
+		echo "[TEARDOWN] REFUSED: will not delete canonical session {$uuid}\n";
+		return false;
+	}
+
+	$session_id = (int) $session_id;
+
+	// Guard 2: verify UUID+ID identify the same row.
+	$row = $wpdb->get_row(
+		$wpdb->prepare(
+			"SELECT id, session_uuid FROM wp_konx_migration_exec_sessions WHERE id = %d AND session_uuid = %s LIMIT 1",
+			$session_id,
+			$uuid
+		)
+	);
+
+	if ( null === $row ) {
+		// Row already gone — treat as success (idempotent).
+		deregister_test_session( $uuid );
+		return true;
+	}
+
+	// Guard 3: atomic three-table delete.
+	$wpdb->query( 'START TRANSACTION' );
+
+	$plan_table    = $wpdb->prefix . 'konx_migration_execution_plan';
+	$ledger_table  = $wpdb->prefix . 'konx_migration_execution_ledger';
+	$session_table = $wpdb->prefix . 'konx_migration_exec_sessions';
+
+	$del_ledger = $wpdb->delete( $ledger_table, array( 'session_id' => $session_id ), array( '%d' ) );
+	$del_plan   = $wpdb->delete( $plan_table,   array( 'session_id' => $session_id ), array( '%d' ) );
+
+	// Delete session row only when UUID still matches (double-check inside TX).
+	$del_session = $wpdb->query(
+		$wpdb->prepare(
+			"DELETE FROM `{$session_table}` WHERE id = %d AND session_uuid = %s LIMIT 1",
+			$session_id,
+			$uuid
+		)
+	);
+
+	if ( false === $del_ledger || false === $del_plan || false === $del_session || ! $del_session ) {
+		$wpdb->query( 'ROLLBACK' );
+		echo "[TEARDOWN] ROLLBACK: failed to delete session {$uuid} (id={$session_id}): {$wpdb->last_error}\n";
+		return false;
+	}
+
+	$wpdb->query( 'COMMIT' );
+	deregister_test_session( $uuid );
+	return true;
+}
+
+/**
+ * Tear down every session registered in the current test process.
+ *
+ * Called explicitly at the end of test files AND registered as a shutdown
+ * handler so crashes during a test run still attempt cleanup.
+ *
+ * Sessions are cleaned in LIFO order (most recently created first) to
+ * respect any potential FK constraints.
+ *
+ * Note: this does NOT fire on SIGKILL / SIGSEGV / OOM — those failures
+ * require manual intervention.
+ */
+function teardown_all_test_sessions() {
+	global $_konx_test_created_sessions;
+
+	if ( empty( $_konx_test_created_sessions ) ) {
+		return;
+	}
+
+	// LIFO: reverse so the most recently created session is cleaned first.
+	$sessions = array_reverse( $_konx_test_created_sessions, true );
+
+	foreach ( $sessions as $uuid => $session_id ) {
+		safe_cleanup_test_session( $uuid, $session_id );
+	}
+}
+
+// Register as shutdown handler for crash recovery.
+// Does NOT fire on SIGKILL, SIGSEGV, or OOM kills.
+register_shutdown_function( 'teardown_all_test_sessions' );
+
 echo "[BOOTSTRAP] Integration test environment ready.\n";
-echo "[BOOTSTRAP] DB: konx.world | Tables: exec_sessions, execution_plan, execution_ledger\n\n";
+echo "[BOOTSTRAP] DB: konx.world | Tables: exec_sessions, execution_plan, execution_ledger\n";
+echo "[BOOTSTRAP] Test teardown registry active. Canonical session protected: " . KONX_CANONICAL_SESSION_UUID . "\n\n";
