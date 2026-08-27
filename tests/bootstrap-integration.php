@@ -27,6 +27,16 @@ if ( ! defined( 'OBJECT' ) ) {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 24C-6D test execution gate.
+// Enables Konx_Migration_Record_Executor::execute_record() and
+// Konx_Migration_Exec_Session::set_test_execution_status().
+// MUST NOT be defined in production wp-config.php or plugin bootstrap.
+// ---------------------------------------------------------------------------
+if ( ! defined( 'KONX_MIGRATION_TEST_EXECUTION_ENABLED' ) ) {
+	define( 'KONX_MIGRATION_TEST_EXECUTION_ENABLED', true );
+}
+
+// ---------------------------------------------------------------------------
 // WP_Error stub.
 // ---------------------------------------------------------------------------
 if ( ! class_exists( 'WP_Error' ) ) {
@@ -220,9 +230,10 @@ function current_time( $type, $gmt = false ) {
 // Minimal $wpdb using mysqli directly.
 // ---------------------------------------------------------------------------
 class Konx_Test_WPDB {
-	public $prefix  = 'wp_';
-	public $last_error = '';
-	public $insert_id  = 0;
+	public $prefix       = 'wp_';
+	public $last_error   = '';
+	public $insert_id    = 0;
+	public $rows_affected = 0; // Tracks affected_rows from last query()/update()/delete().
 	// Standard WP table references.
 	public $users        = 'wp_users';
 	public $usermeta     = 'wp_usermeta';
@@ -351,7 +362,8 @@ class Konx_Test_WPDB {
 			$this->last_error = $e->getMessage();
 			return false;
 		}
-		$this->last_error = $this->conn->error;
+		$this->last_error   = $this->conn->error;
+		$this->rows_affected = $this->conn->affected_rows;
 		return $ok ? $this->conn->affected_rows : false;
 	}
 
@@ -366,19 +378,258 @@ class Konx_Test_WPDB {
 		}
 		$sql = "DELETE FROM `{$table}` WHERE " . implode( ' AND ', $where_parts );
 		$ok  = $this->conn->query( $sql );
-		$this->last_error = $this->conn->error;
+		$this->last_error   = $this->conn->error;
+		$this->rows_affected = $this->conn->affected_rows;
 		return $ok ? $this->conn->affected_rows : false;
 	}
 
 	public function query( $sql ) {
 		$ok = $this->conn->query( $sql );
 		$this->last_error = $this->conn->error;
+		// Track affected_rows for UPDATE/DELETE via query() — used by record executor
+		// for the atomic ledger claim check.
+		$this->rows_affected = $this->conn->affected_rows;
 		return $ok;
+	}
+
+	/**
+	 * Return the number of rows affected by the last query() or update() call.
+	 *
+	 * Required by Konx_Migration_Record_Executor::get_affected_rows() to detect
+	 * whether the atomic ledger claim UPDATE affected exactly 1 row.
+	 *
+	 * @return int
+	 */
+	public function get_affected_rows() {
+		return isset( $this->rows_affected ) ? (int) $this->rows_affected : 0;
 	}
 }
 
 // Instantiate global $wpdb.
 $wpdb = new Konx_Test_WPDB( 'konx.world', 'root', '', '127.0.0.1' );
+
+// ---------------------------------------------------------------------------
+// WordPress API stubs for Phase 24C-6D (record executor).
+// These are no-op or minimal implementations that replace full WP functions
+// for the test environment. Do NOT add duplicates of stubs already above.
+// ---------------------------------------------------------------------------
+
+/**
+ * sanitize_textarea_field — passthrough strip_tags for test env.
+ */
+if ( ! function_exists( 'sanitize_textarea_field' ) ) {
+	function sanitize_textarea_field( $str ) {
+		return trim( strip_tags( (string) $str ) );
+	}
+}
+
+/**
+ * is_email — basic email validation for test env.
+ */
+if ( ! function_exists( 'is_email' ) ) {
+	function is_email( $email ) {
+		return false !== filter_var( $email, FILTER_VALIDATE_EMAIL );
+	}
+}
+
+/**
+ * wp_generate_password — generate a random password in test env.
+ */
+if ( ! function_exists( 'wp_generate_password' ) ) {
+	function wp_generate_password( $length = 12, $special = true, $extra = true ) {
+		$chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+		if ( $special ) { $chars .= '!@#$%^&*'; }
+		if ( $extra )   { $chars .= '()-_[]{}<>~`+=,.;:/?|'; }
+		$pw  = '';
+		$max = strlen( $chars ) - 1;
+		for ( $i = 0; $i < $length; $i++ ) {
+			$pw .= $chars[ random_int( 0, $max ) ];
+		}
+		return $pw;
+	}
+}
+
+/**
+ * sanitize_user — strip invalid characters from username.
+ */
+if ( ! function_exists( 'sanitize_user' ) ) {
+	function sanitize_user( $username, $strict = false ) {
+		$username = preg_replace( '|%([a-fA-F0-9][a-fA-F0-9])|', '', (string) $username );
+		$username = preg_replace( '/&.+?;/', '', $username );
+		$username = str_replace( array( '<', '>' ), '', $username );
+		if ( $strict ) {
+			$username = preg_replace( '|[^a-z0-9 _.\-@]|i', '', $username );
+		}
+		$username = trim( $username );
+		return $username;
+	}
+}
+
+/**
+ * email_exists — check if email is in wp_users.
+ */
+if ( ! function_exists( 'email_exists' ) ) {
+	function email_exists( $email ) {
+		global $wpdb;
+		$uid = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT ID FROM {$wpdb->users} WHERE LOWER(user_email) = %s LIMIT 1",
+				strtolower( trim( $email ) )
+			)
+		);
+		return $uid ? (int) $uid : false;
+	}
+}
+
+/**
+ * username_exists — check if username is in wp_users.
+ */
+if ( ! function_exists( 'username_exists' ) ) {
+	function username_exists( $username ) {
+		global $wpdb;
+		$uid = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT ID FROM {$wpdb->users} WHERE user_login = %s LIMIT 1",
+				$username
+			)
+		);
+		return $uid ? (int) $uid : false;
+	}
+}
+
+/**
+ * get_user_by — minimal implementation for test env.
+ */
+if ( ! function_exists( 'get_user_by' ) ) {
+	function get_user_by( $field, $value ) {
+		global $wpdb;
+		switch ( $field ) {
+			case 'id':
+			case 'ID':
+				$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->users} WHERE ID = %d LIMIT 1", (int) $value ) );
+				break;
+			case 'email':
+				$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->users} WHERE user_email = %s LIMIT 1", $value ) );
+				break;
+			case 'login':
+				$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->users} WHERE user_login = %s LIMIT 1", $value ) );
+				break;
+			default:
+				$row = null;
+		}
+		return $row ?: false;
+	}
+}
+
+/**
+ * wp_create_user — create a WP user by inserting into wp_users.
+ */
+if ( ! function_exists( 'wp_create_user' ) ) {
+	function wp_create_user( $username, $password, $email ) {
+		global $wpdb;
+		$now = current_time( 'mysql', true );
+		// Check for duplicate.
+		if ( username_exists( $username ) ) {
+			return new WP_Error( 'existing_user_login', "Username {$username} already exists." );
+		}
+		if ( email_exists( $email ) ) {
+			return new WP_Error( 'existing_user_email', "Email {$email} already exists." );
+		}
+		// Hash the password.
+		$hashed = '$P$B' . md5( $password . time() ); // Simplified hash for tests.
+		$ok = $wpdb->insert( $wpdb->users, array(
+			'user_login'          => $username,
+			'user_pass'           => $hashed,
+			'user_email'          => $email,
+			'user_registered'     => $now,
+			'user_status'         => 0,
+			'display_name'        => $username,
+		) );
+		if ( false === $ok ) {
+			return new WP_Error( 'db_insert_failed', 'Failed to insert user: ' . $wpdb->last_error );
+		}
+		return (int) $wpdb->insert_id;
+	}
+}
+
+/**
+ * get_userdata — retrieve a WP user object by ID.
+ */
+if ( ! function_exists( 'get_userdata' ) ) {
+	function get_userdata( $user_id ) {
+		return get_user_by( 'id', $user_id );
+	}
+}
+
+/**
+ * update_user_meta — update/insert a user meta row.
+ */
+if ( ! function_exists( 'update_user_meta' ) ) {
+	function update_user_meta( $user_id, $meta_key, $meta_value, $prev_value = '' ) {
+		global $wpdb;
+		$existing = $wpdb->get_var( $wpdb->prepare(
+			"SELECT umeta_id FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key = %s LIMIT 1",
+			$user_id, $meta_key
+		) );
+		if ( $existing ) {
+			return $wpdb->update( $wpdb->usermeta, array( 'meta_value' => maybe_serialize( $meta_value ) ), array( 'user_id' => $user_id, 'meta_key' => $meta_key ) );
+		}
+		return $wpdb->insert( $wpdb->usermeta, array( 'user_id' => (int) $user_id, 'meta_key' => $meta_key, 'meta_value' => maybe_serialize( $meta_value ) ) );
+	}
+}
+
+/**
+ * maybe_serialize — return serialized form only for arrays/objects.
+ */
+if ( ! function_exists( 'maybe_serialize' ) ) {
+	function maybe_serialize( $data ) {
+		if ( is_array( $data ) || is_object( $data ) ) {
+			return serialize( $data );
+		}
+		return $data;
+	}
+}
+
+/**
+ * add_filter / remove_filter / do_action / apply_filters — no-op stubs.
+ * These are called by the executor for notification suppression.
+ */
+if ( ! function_exists( 'add_filter' ) ) {
+	function add_filter( $hook, $callback, $priority = 10, $accepted_args = 1 ) {
+		// No-op in test environment — notifications are not sent anyway.
+		return true;
+	}
+}
+
+if ( ! function_exists( 'remove_filter' ) ) {
+	function remove_filter( $hook, $callback, $priority = 10 ) {
+		return true;
+	}
+}
+
+if ( ! function_exists( 'do_action' ) ) {
+	function do_action( $hook, ...$args ) {
+		// No-op.
+	}
+}
+
+if ( ! function_exists( 'apply_filters' ) ) {
+	function apply_filters( $hook, $value, ...$args ) {
+		return $value;
+	}
+}
+
+if ( ! function_exists( 'wp_new_user_notification' ) ) {
+	function wp_new_user_notification( $user_id, $deprecated = null, $notify = '' ) {
+		// No-op in test environment.
+	}
+}
+
+if ( ! function_exists( 'wp_rand' ) ) {
+	function wp_rand( $min = 0, $max = PHP_INT_MAX ) {
+		return random_int( $min, $max );
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Load the Phase 24C-6B classes.
@@ -389,6 +640,9 @@ require_once $includes . 'class-konx-migration-exec-session.php';
 require_once $includes . 'class-konx-migration-execution-ledger.php';
 require_once $includes . 'class-konx-migration-execution-plan.php';
 require_once $includes . 'class-konx-migration-revalidator.php';
+
+// Phase 24C-6D: Single-record executor.
+require_once $includes . 'class-konx-migration-record-executor.php';
 
 // ---------------------------------------------------------------------------
 // Canonical session protection — NEVER delete this session.
