@@ -52,11 +52,15 @@ class Konx_Migration_Exec_Session {
 	/**
 	 * Valid session statuses.
 	 *
+	 * Note: 'test_execution' is a Phase 24C-6D temporary status for synthetic
+	 * test sessions only. It is never used on the canonical production session.
+	 *
 	 * @var array
 	 */
 	private static $valid_statuses = array(
 		'draft',
 		'frozen',
+		'test_execution',
 		'approved',
 		'running',
 		'paused',
@@ -482,6 +486,45 @@ class Konx_Migration_Exec_Session {
 	// ------------------------------------------------------------------
 	// Helpers
 	// ------------------------------------------------------------------
+
+	/**
+	 * Transition a non-canonical session from 'frozen' to 'test_execution' status.
+	 *
+	 * Used ONLY by the Phase 24C-6D test harness. Refuses the canonical production
+	 * session UUID unconditionally. Only sessions currently in 'frozen' status
+	 * are accepted — this prevents accidental use on sessions in other states.
+	 *
+	 * This method is temporary Phase 24C-6D scaffolding. Production execution
+	 * will use an 'approved' → 'running' transition path in a future phase.
+	 *
+	 * @param string $session_uuid The session UUID to promote.
+	 * @return bool True if updated exactly 1 row; false otherwise.
+	 */
+	public static function set_test_execution_status( $session_uuid ) {
+		// Environment gate: only callable in test environments.
+		// KONX_MIGRATION_TEST_EXECUTION_ENABLED must be explicitly defined as true.
+		if ( ! defined( 'KONX_MIGRATION_TEST_EXECUTION_ENABLED' ) || ! KONX_MIGRATION_TEST_EXECUTION_ENABLED ) {
+			return false;
+		}
+
+		// Canonical protection — absolute guard.
+		if ( '395e2b79-1e0a-49e8-9ea6-1ae146c9a54d' === $session_uuid ) {
+			return false;
+		}
+
+		global $wpdb;
+		$table = $wpdb->prefix . self::TABLE;
+
+		$result = $wpdb->update(
+			$table,
+			array( 'status' => 'test_execution' ),
+			array( 'session_uuid' => $session_uuid, 'status' => 'frozen' ),
+			array( '%s' ),
+			array( '%s', '%s' )
+		);
+
+		return 1 === $result;
+	}
 
 	/**
 	 * Generate a unique UUID v4 session identifier.
