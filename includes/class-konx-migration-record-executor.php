@@ -1,17 +1,20 @@
 <?php
 /**
- * Single-record migration executor — Phase 24C-6D.
+ * Single-record migration executor — Phase 24C-6D/6E.
  *
  * Executes a single frozen execution-plan record for a session in
- * 'test_execution' status. This is LOCAL/TEST ONLY scaffolding.
+ * 'frozen' status when KONX_MIGRATION_TEST_EXECUTION_ENABLED is true.
+ * This is LOCAL/TEST ONLY scaffolding.
  *
  * KEY CONSTRAINTS:
  *   - Reads ONLY from wp_konx_migration_execution_plan (never decision_matrix).
  *   - Canonical session UUID '395e2b79-1e0a-49e8-9ea6-1ae146c9a54d' is blocked.
- *   - Only sessions in 'test_execution' status are accepted.
+ *   - Only sessions in 'frozen' status are accepted when KONX_MIGRATION_TEST_EXECUTION_ENABLED is true.
  *   - Atomic ledger claim via UPDATE WHERE status='pending' / affected_rows check.
  *   - Per-record revalidation before any business mutation.
- *   - Compensation rollback for partial failures on create action.
+ *   - Terminal ledger writes are checked for DB failure; 'ledger_persist_failed'
+ *     is returned when business succeeds but the ledger write does not.
+ *   - Compensation rollback verifies ownership via konx_source/konx_migrated_po10_id meta.
  *   - Cross-session idempotency via ledger.status='completed' check.
  *   - No Execute button, REST endpoint, or AJAX endpoint is exposed.
  *
@@ -23,12 +26,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-/**
- * Allowed session statuses for Phase 24C-6D test execution.
- */
-if ( ! defined( 'KONX_EXEC_ALLOWED_STATUSES_TEST' ) ) {
-	define( 'KONX_EXEC_ALLOWED_STATUSES_TEST', array( 'test_execution' ) );
-}
+// Phase 24C-6E: KONX_EXEC_ALLOWED_STATUSES_TEST (Phase 24C-6D constant) removed.
+// Sessions in 'frozen' status are executed directly when KONX_MIGRATION_TEST_EXECUTION_ENABLED === true.
 
 /**
  * Class Konx_Migration_Record_Executor
@@ -57,6 +56,18 @@ class Konx_Migration_Record_Executor {
 	/** @var bool When true, compensate_delete_wp_user() returns false (simulates unsafe compensation). */
 	private static $test_block_compensation = false;
 
+	/** @var bool When true, mark_ledger_completed() returns a simulated WP_Error (Phase 24C-6E). */
+	private static $test_completed_update_fail = false;
+
+	/** @var bool When true, mark_ledger_failed() returns a simulated WP_Error (Phase 24C-6E). */
+	private static $test_failed_update_fail = false;
+
+	/** @var bool When true, mark_ledger_partial() returns a simulated WP_Error (Phase 24C-6E). */
+	private static $test_partial_update_fail = false;
+
+	/** @var bool When true, execute_create_record() skips migration ownership meta writes (Phase 24C-6E). */
+	private static $test_skip_ownership_meta = false;
+
 	/**
 	 * Enable or disable test-only affiliate insert failure injection.
 	 * Only callable when KONX_MIGRATION_TEST_EXECUTION_ENABLED is true.
@@ -84,6 +95,61 @@ class Konx_Migration_Record_Executor {
 	}
 
 	/**
+	 * Enable or disable test-only completed-ledger write failure injection.
+	 * Only callable when KONX_MIGRATION_TEST_EXECUTION_ENABLED is true.
+	 *
+	 * @param bool $fail True to inject failure.
+	 */
+	public static function set_test_completed_update_fail( $fail ) {
+		if ( ! defined( 'KONX_MIGRATION_TEST_EXECUTION_ENABLED' ) || ! KONX_MIGRATION_TEST_EXECUTION_ENABLED ) {
+			return;
+		}
+		self::$test_completed_update_fail = (bool) $fail;
+	}
+
+	/**
+	 * Enable or disable test-only failed-ledger write failure injection.
+	 * Only callable when KONX_MIGRATION_TEST_EXECUTION_ENABLED is true.
+	 *
+	 * @param bool $fail True to inject failure.
+	 */
+	public static function set_test_failed_update_fail( $fail ) {
+		if ( ! defined( 'KONX_MIGRATION_TEST_EXECUTION_ENABLED' ) || ! KONX_MIGRATION_TEST_EXECUTION_ENABLED ) {
+			return;
+		}
+		self::$test_failed_update_fail = (bool) $fail;
+	}
+
+	/**
+	 * Enable or disable test-only partial-ledger write failure injection.
+	 * Only callable when KONX_MIGRATION_TEST_EXECUTION_ENABLED is true.
+	 *
+	 * @param bool $fail True to inject failure.
+	 */
+	public static function set_test_partial_update_fail( $fail ) {
+		if ( ! defined( 'KONX_MIGRATION_TEST_EXECUTION_ENABLED' ) || ! KONX_MIGRATION_TEST_EXECUTION_ENABLED ) {
+			return;
+		}
+		self::$test_partial_update_fail = (bool) $fail;
+	}
+
+	/**
+	 * Enable or disable test-only ownership meta skip.
+	 * When true, execute_create_record() skips writing konx_source and
+	 * konx_migrated_po10_id meta, so compensate_delete_wp_user() will find
+	 * no ownership proof and refuse deletion (→ partial state).
+	 * Only callable when KONX_MIGRATION_TEST_EXECUTION_ENABLED is true.
+	 *
+	 * @param bool $skip True to skip ownership meta.
+	 */
+	public static function set_test_skip_ownership_meta( $skip ) {
+		if ( ! defined( 'KONX_MIGRATION_TEST_EXECUTION_ENABLED' ) || ! KONX_MIGRATION_TEST_EXECUTION_ENABLED ) {
+			return;
+		}
+		self::$test_skip_ownership_meta = (bool) $skip;
+	}
+
+	/**
 	 * Reset all test-only injection hooks to defaults.
 	 * Only callable when KONX_MIGRATION_TEST_EXECUTION_ENABLED is true.
 	 */
@@ -91,8 +157,12 @@ class Konx_Migration_Record_Executor {
 		if ( ! defined( 'KONX_MIGRATION_TEST_EXECUTION_ENABLED' ) || ! KONX_MIGRATION_TEST_EXECUTION_ENABLED ) {
 			return;
 		}
-		self::$test_affiliate_insert_fail = false;
-		self::$test_block_compensation    = false;
+		self::$test_affiliate_insert_fail  = false;
+		self::$test_block_compensation     = false;
+		self::$test_completed_update_fail  = false;
+		self::$test_failed_update_fail     = false;
+		self::$test_partial_update_fail    = false;
+		self::$test_skip_ownership_meta    = false;
 	}
 
 	/**
@@ -116,14 +186,14 @@ class Konx_Migration_Record_Executor {
 	 * The caller may NOT supply action, email, wp_user_id, or any
 	 * business data — only the session UUID and plan record ID.
 	 *
-	 * @param string $session_uuid   UUID of a 'test_execution' session.
+	 * @param string $session_uuid   UUID of a 'frozen' session (KONX_MIGRATION_TEST_EXECUTION_ENABLED must be true).
 	 * @param int    $plan_record_id Primary key of the plan row to execute.
 	 * @return array {
 	 *     @type string      $session_uuid     Session UUID.
 	 *     @type int         $plan_record_id   Plan table primary key.
 	 *     @type int         $source_record_id PO10 source ID.
 	 *     @type string      $action           Frozen action type.
-	 *     @type string      $status           completed|failed|partial|skipped|conflict|already_migrated.
+	 *     @type string      $status           completed|failed|partial|ledger_persist_failed|skipped|conflict|already_migrated.
 	 *     @type int|null    $wp_user_id       WP user ID if set.
 	 *     @type bool        $wp_user_created  True if new WP user was created.
 	 *     @type int|null    $affiliate_id     KonX affiliate ID if set.
@@ -191,18 +261,18 @@ class Konx_Migration_Record_Executor {
 		}
 
 		// ------------------------------------------------------------------
-		// PRECONDITION 2: Session status must be in allowed test states.
+		// PRECONDITION 2: Session must be in 'frozen' status.
+		// Phase 24C-6E: test_execution status removed. Sessions remain frozen.
 		// ------------------------------------------------------------------
-		if ( ! in_array( $session->status, KONX_EXEC_ALLOWED_STATUSES_TEST, true ) ) {
+		if ( 'frozen' !== $session->status ) {
 			return self::error_result(
 				$session_uuid,
 				$plan_record_id,
 				'',
 				'invalid_session_status',
 				sprintf(
-					'Session status "%s" is not allowed for Phase 24C-6D execution. Required: %s.',
-					$session->status,
-					implode( ', ', KONX_EXEC_ALLOWED_STATUSES_TEST )
+					'Session status "%s" is not allowed for execution. Required: frozen.',
+					$session->status
 				)
 			);
 		}
@@ -504,28 +574,9 @@ class Konx_Migration_Record_Executor {
 			case 'link_ca':
 				return self::execute_link_ca_record( $session_uuid, $plan_row, $ledger_row );
 
-			case 'invalid':
-			case 'skip':
-			case 'review':
-				// Non-actionable records. Mark as skipped (not completed).
-				self::mark_ledger_skipped( $ledger_row->id, 'non_actionable' );
-
-				return array(
-					'session_uuid'      => $session_uuid,
-					'plan_record_id'    => $plan_record_id,
-					'source_record_id'  => $source_record_id,
-					'action'            => $action,
-					'status'            => 'skipped',
-					'wp_user_id'        => null,
-					'wp_user_created'   => false,
-					'affiliate_id'      => null,
-					'affiliate_created' => false,
-					'error_code'        => 'non_actionable',
-					'error_message'     => sprintf( 'Action "%s" is non-actionable — no business writes performed.', $action ),
-					'attempt_count'     => (int) $ledger_row->attempt_count,
-					'started_at'        => $ledger_row->started_at,
-					'completed_at'      => null,
-				);
+			// NOTE: 'invalid', 'skip', 'review' are handled by early dispatch before
+			// the ledger claim (above). They never reach this switch. The default case
+			// below catches any unexpected actions fail-closed.
 
 			default:
 				self::mark_ledger_failed( $ledger_row->id, 'invalid_action', sprintf( 'Unknown action: %s', $action ) );
@@ -663,9 +714,12 @@ class Konx_Migration_Record_Executor {
 			self::update_user_meta_direct( $wp_user_id, 'last_name', $last_name );
 		}
 
-		// Store migration source meta.
-		self::update_user_meta_direct( $wp_user_id, 'konx_source', 'migration' );
-		self::update_user_meta_direct( $wp_user_id, 'konx_migrated_po10_id', (string) $source_record_id );
+		// Store migration source meta (ownership proof for compensation).
+		// Test-only injection: skip_ownership_meta bypasses this to allow ownership-failure testing.
+		if ( ! self::$test_skip_ownership_meta ) {
+			self::update_user_meta_direct( $wp_user_id, 'konx_source', 'migration' );
+			self::update_user_meta_direct( $wp_user_id, 'konx_migrated_po10_id', (string) $source_record_id );
+		}
 
 		// Insert KonX affiliate.
 		$aff_args = array(
@@ -686,19 +740,39 @@ class Konx_Migration_Record_Executor {
 		$aff_created   = false;
 
 		if ( is_wp_error( $affiliate_id ) || false === $affiliate_id ) {
-			// COMPENSATION: delete the WP user we just created (safe — we own it,
-			// no other refs yet, no affiliate was created).
+			// COMPENSATION: delete the WP user we just created.
+			// compensate_delete_wp_user() verifies ownership via migration meta
+			// before deleting. Only the exact user created by this attempt is deleted.
 			$err_msg = is_wp_error( $affiliate_id ) ? $affiliate_id->get_error_message() : 'insert_konx_affiliate failed';
 
-			$compensated = self::compensate_delete_wp_user( $wp_user_id );
+			$compensated = self::compensate_delete_wp_user( $wp_user_id, $source_record_id );
 
 			if ( $compensated ) {
-				// Full compensation — report as failed (no partial state).
-				self::mark_ledger_failed(
+				// Full compensation — WP user deleted; report as failed (clean state).
+				$ledger_write = self::mark_ledger_failed(
 					$ledger_row->id,
 					'affiliate_insert_failed',
 					'Affiliate insert failed; WP user deleted (compensated). ' . $err_msg
 				);
+				if ( is_wp_error( $ledger_write ) ) {
+					// WP user deleted but ledger is stuck at 'processing'.
+					return array(
+						'session_uuid'      => $session_uuid,
+						'plan_record_id'    => $plan_record_id,
+						'source_record_id'  => $source_record_id,
+						'action'            => 'create',
+						'status'            => 'ledger_persist_failed',
+						'wp_user_id'        => null,
+						'wp_user_created'   => false,
+						'affiliate_id'      => null,
+						'affiliate_created' => false,
+						'error_code'        => 'ledger_persist_failed',
+						'error_message'     => 'Affiliate failed, WP user compensated, but ledger write failed: ' . sanitize_text_field( mb_substr( $ledger_write->get_error_message(), 0, 400 ) ),
+						'attempt_count'     => (int) $ledger_row->attempt_count,
+						'started_at'        => $ledger_row->started_at,
+						'completed_at'      => null,
+					);
+				}
 
 				return array(
 					'session_uuid'      => $session_uuid,
@@ -717,8 +791,10 @@ class Konx_Migration_Record_Executor {
 					'completed_at'      => null,
 				);
 			} else {
-				// WP user exists but affiliate failed — partial state.
-				self::mark_ledger_partial(
+				// Compensation refused — WP user exists but affiliate failed (partial state).
+				// This occurs when compensation cannot prove ownership, or when the
+				// affiliate attachment race guard fires.
+				$ledger_write = self::mark_ledger_partial(
 					$ledger_row->id,
 					$wp_user_id,
 					true,
@@ -727,6 +803,25 @@ class Konx_Migration_Record_Executor {
 					'affiliate_insert_failed',
 					'Affiliate insert failed; WP user exists (partial). ' . $err_msg
 				);
+				if ( is_wp_error( $ledger_write ) ) {
+					// WP user exists (partial) but ledger is stuck at 'processing'.
+					return array(
+						'session_uuid'      => $session_uuid,
+						'plan_record_id'    => $plan_record_id,
+						'source_record_id'  => $source_record_id,
+						'action'            => 'create',
+						'status'            => 'ledger_persist_failed',
+						'wp_user_id'        => $wp_user_id,
+						'wp_user_created'   => true,
+						'affiliate_id'      => null,
+						'affiliate_created' => false,
+						'error_code'        => 'ledger_persist_failed',
+						'error_message'     => 'Partial state (WP user kept): ledger write failed: ' . sanitize_text_field( mb_substr( $ledger_write->get_error_message(), 0, 400 ) ),
+						'attempt_count'     => (int) $ledger_row->attempt_count,
+						'started_at'        => $ledger_row->started_at,
+						'completed_at'      => null,
+					);
+				}
 
 				return array(
 					'session_uuid'      => $session_uuid,
@@ -751,7 +846,29 @@ class Konx_Migration_Record_Executor {
 		$aff_created  = true;
 
 		// SUCCESS — mark ledger completed.
-		$completed_at = self::mark_ledger_completed( $ledger_row->id, $wp_user_id, true, $affiliate_id, true );
+		$ledger_result = self::mark_ledger_completed( $ledger_row->id, $wp_user_id, true, $affiliate_id, true );
+		if ( is_wp_error( $ledger_result ) ) {
+			// Business mutation succeeded (WP user + affiliate created) but the
+			// ledger write failed. The record is stuck at 'processing' in the DB.
+			// Return ledger_persist_failed so callers can surface the inconsistency.
+			// Do NOT claim 'completed' — it was not persisted.
+			return array(
+				'session_uuid'      => $session_uuid,
+				'plan_record_id'    => $plan_record_id,
+				'source_record_id'  => $source_record_id,
+				'action'            => 'create',
+				'status'            => 'ledger_persist_failed',
+				'wp_user_id'        => $wp_user_id,
+				'wp_user_created'   => true,
+				'affiliate_id'      => $affiliate_id,
+				'affiliate_created' => true,
+				'error_code'        => 'ledger_persist_failed',
+				'error_message'     => sanitize_text_field( mb_substr( $ledger_result->get_error_message(), 0, 500 ) ),
+				'attempt_count'     => (int) $ledger_row->attempt_count,
+				'started_at'        => $ledger_row->started_at,
+				'completed_at'      => null,
+			);
+		}
 
 		return array(
 			'session_uuid'      => $session_uuid,
@@ -767,7 +884,7 @@ class Konx_Migration_Record_Executor {
 			'error_message'     => null,
 			'attempt_count'     => (int) $ledger_row->attempt_count,
 			'started_at'        => $ledger_row->started_at,
-			'completed_at'      => $completed_at,
+			'completed_at'      => $ledger_result['completed_at'],
 		);
 	}
 
@@ -881,8 +998,26 @@ class Konx_Migration_Record_Executor {
 			);
 		}
 
-		$affiliate_id = (int) $affiliate_id;
-		$completed_at = self::mark_ledger_completed( $ledger_row->id, $wp_user_id, false, $affiliate_id, true );
+		$affiliate_id  = (int) $affiliate_id;
+		$ledger_result = self::mark_ledger_completed( $ledger_row->id, $wp_user_id, false, $affiliate_id, true );
+		if ( is_wp_error( $ledger_result ) ) {
+			return array(
+				'session_uuid'      => $session_uuid,
+				'plan_record_id'    => $plan_record_id,
+				'source_record_id'  => $source_record_id,
+				'action'            => 'link_wp',
+				'status'            => 'ledger_persist_failed',
+				'wp_user_id'        => $wp_user_id,
+				'wp_user_created'   => false,
+				'affiliate_id'      => $affiliate_id,
+				'affiliate_created' => true,
+				'error_code'        => 'ledger_persist_failed',
+				'error_message'     => sanitize_text_field( mb_substr( $ledger_result->get_error_message(), 0, 500 ) ),
+				'attempt_count'     => (int) $ledger_row->attempt_count,
+				'started_at'        => $ledger_row->started_at,
+				'completed_at'      => null,
+			);
+		}
 
 		return array(
 			'session_uuid'      => $session_uuid,
@@ -898,7 +1033,7 @@ class Konx_Migration_Record_Executor {
 			'error_message'     => null,
 			'attempt_count'     => (int) $ledger_row->attempt_count,
 			'started_at'        => $ledger_row->started_at,
-			'completed_at'      => $completed_at,
+			'completed_at'      => $ledger_result['completed_at'],
 		);
 	}
 
@@ -1083,8 +1218,26 @@ class Konx_Migration_Record_Executor {
 			);
 		}
 
-		$affiliate_id = (int) $affiliate_id;
-		$completed_at = self::mark_ledger_completed( $ledger_row->id, $wp_user_id, false, $affiliate_id, true );
+		$affiliate_id  = (int) $affiliate_id;
+		$ledger_result = self::mark_ledger_completed( $ledger_row->id, $wp_user_id, false, $affiliate_id, true );
+		if ( is_wp_error( $ledger_result ) ) {
+			return array(
+				'session_uuid'      => $session_uuid,
+				'plan_record_id'    => $plan_record_id,
+				'source_record_id'  => $source_record_id,
+				'action'            => 'link_ca',
+				'status'            => 'ledger_persist_failed',
+				'wp_user_id'        => $wp_user_id,
+				'wp_user_created'   => false,
+				'affiliate_id'      => $affiliate_id,
+				'affiliate_created' => true,
+				'error_code'        => 'ledger_persist_failed',
+				'error_message'     => sanitize_text_field( mb_substr( $ledger_result->get_error_message(), 0, 500 ) ),
+				'attempt_count'     => (int) $ledger_row->attempt_count,
+				'started_at'        => $ledger_row->started_at,
+				'completed_at'      => null,
+			);
+		}
 
 		return array(
 			'session_uuid'      => $session_uuid,
@@ -1100,7 +1253,7 @@ class Konx_Migration_Record_Executor {
 			'error_message'     => null,
 			'attempt_count'     => (int) $ledger_row->attempt_count,
 			'started_at'        => $ledger_row->started_at,
-			'completed_at'      => $completed_at,
+			'completed_at'      => $ledger_result['completed_at'],
 		);
 	}
 
@@ -1116,16 +1269,21 @@ class Konx_Migration_Record_Executor {
 	 * @param bool $wp_user_created True if WP user was created this attempt.
 	 * @param int  $affiliate_id    KonX affiliate ID.
 	 * @param bool $affiliate_created True if affiliate was created this attempt.
-	 * @return string completed_at timestamp.
+	 * @return array{ok:true,completed_at:string}|WP_Error Result on success; WP_Error if DB write failed.
 	 */
 	private static function mark_ledger_completed( $ledger_row_id, $wp_user_id, $wp_user_created, $affiliate_id, $affiliate_created ) {
 		global $wpdb;
+
+		// Test-only injection: simulate completed-write DB failure.
+		if ( self::$test_completed_update_fail ) {
+			return new \WP_Error( 'test_injected_ledger_fail', 'Test-injected completed ledger write failure (Phase 24C-6E).' );
+		}
 
 		$table = $wpdb->prefix . Konx_Migration_Execution_Ledger::TABLE;
 		$now   = current_time( 'mysql', true );
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-		$wpdb->update(
+		$result = $wpdb->update(
 			$table,
 			array(
 				'status'            => 'completed',
@@ -1141,7 +1299,18 @@ class Konx_Migration_Record_Executor {
 			array( '%d' )
 		);
 
-		return $now;
+		if ( false === $result || 0 === (int) $result ) {
+			return new \WP_Error(
+				'ledger_persist_failed',
+				sprintf(
+					'Failed to mark ledger row #%d as completed (rows_affected=%s).',
+					absint( $ledger_row_id ),
+					json_encode( $result )
+				)
+			);
+		}
+
+		return array( 'ok' => true, 'completed_at' => $now );
 	}
 
 	/**
@@ -1150,15 +1319,21 @@ class Konx_Migration_Record_Executor {
 	 * @param int    $ledger_row_id Ledger table primary key.
 	 * @param string $error_code    Machine-readable error code.
 	 * @param string $error_message Human-readable error message.
+	 * @return true|WP_Error True on success; WP_Error if DB write failed.
 	 */
 	private static function mark_ledger_failed( $ledger_row_id, $error_code, $error_message ) {
 		global $wpdb;
+
+		// Test-only injection: simulate failed-write DB failure.
+		if ( self::$test_failed_update_fail ) {
+			return new \WP_Error( 'test_injected_ledger_fail', 'Test-injected failed ledger write failure (Phase 24C-6E).' );
+		}
 
 		$table = $wpdb->prefix . Konx_Migration_Execution_Ledger::TABLE;
 		$now   = current_time( 'mysql', true );
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-		$wpdb->update(
+		$result = $wpdb->update(
 			$table,
 			array(
 				'status'        => 'failed',
@@ -1171,10 +1346,19 @@ class Konx_Migration_Record_Executor {
 			null,
 			array( '%d' )
 		);
+
+		if ( false === $result ) {
+			return new \WP_Error(
+				'ledger_persist_failed',
+				sprintf( 'Failed to mark ledger row #%d as failed.', absint( $ledger_row_id ) )
+			);
+		}
+
+		return true;
 	}
 
 	/**
-	 * Mark ledger row as partial (WP user created, affiliate failed, compensation failed).
+	 * Mark ledger row as partial (WP user created, affiliate failed, compensation refused).
 	 *
 	 * @param int    $ledger_row_id   Ledger table primary key.
 	 * @param int    $wp_user_id      WP user ID that was created.
@@ -1183,15 +1367,21 @@ class Konx_Migration_Record_Executor {
 	 * @param bool   $affiliate_created False.
 	 * @param string $error_code      Machine-readable error code.
 	 * @param string $error_message   Human-readable error message.
+	 * @return true|WP_Error True on success; WP_Error if DB write failed.
 	 */
 	private static function mark_ledger_partial( $ledger_row_id, $wp_user_id, $wp_user_created, $affiliate_id, $affiliate_created, $error_code, $error_message ) {
 		global $wpdb;
+
+		// Test-only injection: simulate partial-write DB failure.
+		if ( self::$test_partial_update_fail ) {
+			return new \WP_Error( 'test_injected_ledger_fail', 'Test-injected partial ledger write failure (Phase 24C-6E).' );
+		}
 
 		$table = $wpdb->prefix . Konx_Migration_Execution_Ledger::TABLE;
 		$now   = current_time( 'mysql', true );
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-		$wpdb->update(
+		$result = $wpdb->update(
 			$table,
 			array(
 				'status'            => 'partial',
@@ -1208,6 +1398,15 @@ class Konx_Migration_Record_Executor {
 			null,
 			array( '%d' )
 		);
+
+		if ( false === $result ) {
+			return new \WP_Error(
+				'ledger_persist_failed',
+				sprintf( 'Failed to mark ledger row #%d as partial.', absint( $ledger_row_id ) )
+			);
+		}
+
+		return true;
 	}
 
 	/**
@@ -1242,12 +1441,12 @@ class Konx_Migration_Record_Executor {
 	// ------------------------------------------------------------------
 
 	/**
-	 * Run revalidation for a test_execution session.
+	 * Run revalidation for a test execution session (frozen status).
 	 *
-	 * For test_execution sessions, the FMP parity check needs an override
-	 * because the test session hash won't match the production FMP in wp_options.
-	 * We provide the test session's own plan records as the "live FMP" so the
-	 * parity check passes and per-record checks can proceed.
+	 * The FMP parity check needs an override because the test session hash
+	 * won't match the production FMP in wp_options. We provide the test session's
+	 * own plan records as the "live FMP" so the parity check passes and
+	 * per-record checks can proceed.
 	 *
 	 * @param string $session_uuid The session UUID.
 	 * @param array  $plan_records Already-loaded plan records.
@@ -1690,16 +1889,30 @@ class Konx_Migration_Record_Executor {
 	/**
 	 * Attempt compensating delete of a WP user created this attempt.
 	 *
-	 * SAFETY: Only deletes if the user still exists and has NO KonX affiliate.
-	 * Never deletes pre-existing users.
+	 * SAFETY CONTRACT: Only deletes when ALL of the following are true:
+	 *   1. The user still exists in wp_users.
+	 *   2. No KonX affiliate is attached (race condition guard).
+	 *   3. konx_source user meta == 'migration' (ownership claim present).
+	 *   4. konx_migrated_po10_id user meta matches $source_record_id (exact record match).
 	 *
-	 * @param int $user_id WP user ID to delete.
+	 * Conditions 3 and 4 prevent accidental deletion of a pre-existing WP user
+	 * that shares the same user_id via an ID-recycle race. The meta keys are
+	 * written in execute_create_record() immediately after wp_create_user() and
+	 * before affiliate creation, so they are always present when compensation runs.
+	 *
+	 * Test-only injection: set_test_skip_ownership_meta(true) prevents the meta
+	 * writes, making ownership verification fail here and forcing partial state.
+	 *
+	 * @param int $user_id          WP user ID to delete.
+	 * @param int $source_record_id PO10 source record ID (ownership proof).
 	 * @return bool True if compensated (deleted), false if kept (partial state).
 	 */
-	private static function compensate_delete_wp_user( $user_id ) {
+	private static function compensate_delete_wp_user( $user_id, $source_record_id ) {
 		global $wpdb;
 
-		$user_id = (int) $user_id;
+		$user_id          = (int) $user_id;
+		$source_record_id = (int) $source_record_id;
+
 		if ( ! $user_id ) {
 			return false;
 		}
@@ -1723,9 +1936,30 @@ class Konx_Migration_Record_Executor {
 			return false; // Keep — partial state.
 		}
 
-		// Delete user rows.
+		// OWNERSHIP VERIFICATION: confirm this executor created the user.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$meta_source = $wpdb->get_var( $wpdb->prepare(
+			"SELECT meta_value FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key = 'konx_source' LIMIT 1",
+			$user_id
+		) );
+		if ( 'migration' !== (string) $meta_source ) {
+			// No migration ownership meta — not safe to delete.
+			return false;
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$meta_po10_id = $wpdb->get_var( $wpdb->prepare(
+			"SELECT meta_value FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key = 'konx_migrated_po10_id' LIMIT 1",
+			$user_id
+		) );
+		if ( (string) $source_record_id !== (string) $meta_po10_id ) {
+			// PO10 ID mismatch — not our record.
+			return false;
+		}
+
+		// All safety checks passed. Delete user rows.
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-		$del_meta = $wpdb->delete( $wpdb->usermeta, array( 'user_id' => $user_id ), array( '%d' ) );
+		$wpdb->delete( $wpdb->usermeta, array( 'user_id' => $user_id ), array( '%d' ) );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 		$del_user = $wpdb->delete( $wpdb->users, array( 'ID' => $user_id ), array( '%d' ) );
 

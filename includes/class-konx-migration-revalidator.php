@@ -281,19 +281,18 @@ class Konx_Migration_Revalidator {
 	}
 
 	/**
-	 * Check 2: Session is frozen (or in test_execution status).
+	 * Check 2: Session is frozen.
 	 *
 	 * Only frozen sessions may be revalidated and subsequently approved.
-	 * Phase 24C-6D test sessions in 'test_execution' status are also accepted
-	 * here because they start as 'frozen' and are promoted by the test harness.
-	 * Draft sessions are incomplete; running/completed sessions are immutable
-	 * for a different reason.
+	 * Phase 24C-6E: 'test_execution' status was removed. Test sessions remain
+	 * in 'frozen' status and are executed directly via the KONX_MIGRATION_TEST_EXECUTION_ENABLED
+	 * gate without a status change.
 	 *
 	 * @param object $session Session row.
 	 * @return array Check result.
 	 */
 	private static function check_session_frozen( $session ) {
-		$pass = in_array( $session->status, array( 'frozen', 'test_execution' ), true );
+		$pass = in_array( $session->status, array( 'frozen' ), true );
 
 		return array(
 			'id'       => 'session_frozen',
