@@ -68,6 +68,9 @@ class Konx_Migration_Record_Executor {
 	/** @var bool When true, execute_create_record() skips migration ownership meta writes (Phase 24C-6E). */
 	private static $test_skip_ownership_meta = false;
 
+	/** @var bool When true, persist_resource_evidence() returns a simulated WP_Error (Phase 24C-6F). */
+	private static $test_persist_evidence_fail = false;
+
 	/**
 	 * Enable or disable test-only affiliate insert failure injection.
 	 * Only callable when KONX_MIGRATION_TEST_EXECUTION_ENABLED is true.
@@ -150,6 +153,19 @@ class Konx_Migration_Record_Executor {
 	}
 
 	/**
+	 * Enable or disable test-only resource-evidence persistence failure injection.
+	 * Only callable when KONX_MIGRATION_TEST_EXECUTION_ENABLED is true.
+	 *
+	 * @param bool $fail True to inject failure.
+	 */
+	public static function set_test_persist_evidence_fail( $fail ) {
+		if ( ! defined( 'KONX_MIGRATION_TEST_EXECUTION_ENABLED' ) || ! KONX_MIGRATION_TEST_EXECUTION_ENABLED ) {
+			return;
+		}
+		self::$test_persist_evidence_fail = (bool) $fail;
+	}
+
+	/**
 	 * Reset all test-only injection hooks to defaults.
 	 * Only callable when KONX_MIGRATION_TEST_EXECUTION_ENABLED is true.
 	 */
@@ -163,6 +179,7 @@ class Konx_Migration_Record_Executor {
 		self::$test_failed_update_fail     = false;
 		self::$test_partial_update_fail    = false;
 		self::$test_skip_ownership_meta    = false;
+		self::$test_persist_evidence_fail  = false;
 	}
 
 	/**
@@ -535,11 +552,29 @@ class Konx_Migration_Record_Executor {
 		$record_check = self::check_single_record( $plan_row );
 		if ( 'pass' !== $record_check['status'] ) {
 			// Mark ledger as failed and return early.
-			self::mark_ledger_failed(
+			$ledger_write = self::mark_ledger_failed(
 				$ledger_row->id,
 				'stale_or_conflict',
 				'Per-record revalidation failed: ' . $record_check['message']
 			);
+			if ( is_wp_error( $ledger_write ) ) {
+				return array(
+					'session_uuid'      => $session_uuid,
+					'plan_record_id'    => $plan_record_id,
+					'source_record_id'  => $source_record_id,
+					'action'            => (string) $plan_row->action,
+					'status'            => 'ledger_persist_failed',
+					'wp_user_id'        => null,
+					'wp_user_created'   => false,
+					'affiliate_id'      => null,
+					'affiliate_created' => false,
+					'error_code'        => 'ledger_persist_failed',
+					'error_message'     => 'Per-record revalidation failed; ledger write also failed: ' . sanitize_text_field( mb_substr( $ledger_write->get_error_message(), 0, 400 ) ),
+					'attempt_count'     => (int) $ledger_row->attempt_count,
+					'started_at'        => $ledger_row->started_at,
+					'completed_at'      => null,
+				);
+			}
 
 			return array(
 				'session_uuid'      => $session_uuid,
@@ -579,7 +614,25 @@ class Konx_Migration_Record_Executor {
 			// below catches any unexpected actions fail-closed.
 
 			default:
-				self::mark_ledger_failed( $ledger_row->id, 'invalid_action', sprintf( 'Unknown action: %s', $action ) );
+				$ledger_write = self::mark_ledger_failed( $ledger_row->id, 'invalid_action', sprintf( 'Unknown action: %s', $action ) );
+				if ( is_wp_error( $ledger_write ) ) {
+					return array(
+						'session_uuid'      => $session_uuid,
+						'plan_record_id'    => $plan_record_id,
+						'source_record_id'  => $source_record_id,
+						'action'            => $action,
+						'status'            => 'ledger_persist_failed',
+						'wp_user_id'        => null,
+						'wp_user_created'   => false,
+						'affiliate_id'      => null,
+						'affiliate_created' => false,
+						'error_code'        => 'ledger_persist_failed',
+						'error_message'     => sanitize_text_field( mb_substr( $ledger_write->get_error_message(), 0, 500 ) ),
+						'attempt_count'     => (int) $ledger_row->attempt_count,
+						'started_at'        => $ledger_row->started_at,
+						'completed_at'      => null,
+					);
+				}
 
 				return array(
 					'session_uuid'      => $session_uuid,
@@ -613,6 +666,8 @@ class Konx_Migration_Record_Executor {
 	 * @return array Result.
 	 */
 	private static function execute_create_record( $session_uuid, $plan_row, $ledger_row ) {
+		global $wpdb;
+
 		$plan_record_id   = (int) $plan_row->id;
 		$source_record_id = (int) $plan_row->source_record_id;
 		$email            = strtolower( trim( (string) $plan_row->source_email ) );
@@ -633,7 +688,25 @@ class Konx_Migration_Record_Executor {
 
 		// Sub-check: email_exists() — if true, return stale.
 		if ( self::wp_email_exists( $email ) ) {
-			self::mark_ledger_failed( $ledger_row->id, 'stale_email_exists', sprintf( 'Email %s already exists in wp_users.', $email ) );
+			$ledger_write = self::mark_ledger_failed( $ledger_row->id, 'stale_email_exists', sprintf( 'Email %s already exists in wp_users.', $email ) );
+			if ( is_wp_error( $ledger_write ) ) {
+				return array(
+					'session_uuid'      => $session_uuid,
+					'plan_record_id'    => $plan_record_id,
+					'source_record_id'  => $source_record_id,
+					'action'            => 'create',
+					'status'            => 'ledger_persist_failed',
+					'wp_user_id'        => null,
+					'wp_user_created'   => false,
+					'affiliate_id'      => null,
+					'affiliate_created' => false,
+					'error_code'        => 'ledger_persist_failed',
+					'error_message'     => 'stale_email_exists; ledger write also failed: ' . sanitize_text_field( mb_substr( $ledger_write->get_error_message(), 0, 400 ) ),
+					'attempt_count'     => (int) $ledger_row->attempt_count,
+					'started_at'        => $ledger_row->started_at,
+					'completed_at'      => null,
+				);
+			}
 
 			return array(
 				'session_uuid'      => $session_uuid,
@@ -683,7 +756,25 @@ class Konx_Migration_Record_Executor {
 		if ( is_wp_error( $wp_user_id ) || false === $wp_user_id ) {
 			self::suppress_user_notifications( false );
 			$err_msg = is_wp_error( $wp_user_id ) ? $wp_user_id->get_error_message() : 'wp_create_user returned false';
-			self::mark_ledger_failed( $ledger_row->id, 'wp_user_creation_failed', $err_msg );
+			$ledger_write = self::mark_ledger_failed( $ledger_row->id, 'wp_user_creation_failed', $err_msg );
+			if ( is_wp_error( $ledger_write ) ) {
+				return array(
+					'session_uuid'      => $session_uuid,
+					'plan_record_id'    => $plan_record_id,
+					'source_record_id'  => $source_record_id,
+					'action'            => 'create',
+					'status'            => 'ledger_persist_failed',
+					'wp_user_id'        => null,
+					'wp_user_created'   => false,
+					'affiliate_id'      => null,
+					'affiliate_created' => false,
+					'error_code'        => 'ledger_persist_failed',
+					'error_message'     => 'wp_user_creation_failed; ledger write also failed: ' . sanitize_text_field( mb_substr( $ledger_write->get_error_message(), 0, 400 ) ),
+					'attempt_count'     => (int) $ledger_row->attempt_count,
+					'started_at'        => $ledger_row->started_at,
+					'completed_at'      => null,
+				);
+			}
 
 			return array(
 				'session_uuid'      => $session_uuid,
@@ -707,6 +798,55 @@ class Konx_Migration_Record_Executor {
 		$wp_user_id    = (int) $wp_user_id;
 
 		self::suppress_user_notifications( false );
+
+		// CHECKPOINT 1 (C3): Persist WP user ID to ledger immediately after creation.
+		// This makes the user durable for crash recovery before ownership meta is written.
+		$evidence_result = self::persist_resource_evidence( $ledger_row->id, $wp_user_id, true, null, false );
+		if ( is_wp_error( $evidence_result ) ) {
+			// Evidence persistence failed. The WP user exists but has no ledger or meta proof.
+			// Attempt direct force-compensation: we know we just created this user (held in memory).
+			$wpdb->delete( $wpdb->usermeta, array( 'user_id' => $wp_user_id ), array( '%d' ) );
+			$wpdb->delete( $wpdb->users,    array( 'ID'      => $wp_user_id ), array( '%d' ) );
+			$ledger_write = self::mark_ledger_failed(
+				$ledger_row->id,
+				'evidence_persist_failed',
+				'Cannot persist user evidence; user deleted immediately. ' . $evidence_result->get_error_message()
+			);
+			if ( is_wp_error( $ledger_write ) ) {
+				return array(
+					'session_uuid'      => $session_uuid,
+					'plan_record_id'    => $plan_record_id,
+					'source_record_id'  => $source_record_id,
+					'action'            => 'create',
+					'status'            => 'ledger_persist_failed',
+					'wp_user_id'        => null,
+					'wp_user_created'   => false,
+					'affiliate_id'      => null,
+					'affiliate_created' => false,
+					'error_code'        => 'ledger_persist_failed',
+					'error_message'     => 'Evidence persist failed + ledger write failed: ' . sanitize_text_field( mb_substr( $ledger_write->get_error_message(), 0, 400 ) ),
+					'attempt_count'     => (int) $ledger_row->attempt_count,
+					'started_at'        => $ledger_row->started_at,
+					'completed_at'      => null,
+				);
+			}
+			return array(
+				'session_uuid'      => $session_uuid,
+				'plan_record_id'    => $plan_record_id,
+				'source_record_id'  => $source_record_id,
+				'action'            => 'create',
+				'status'            => 'failed',
+				'wp_user_id'        => null,
+				'wp_user_created'   => false,
+				'affiliate_id'      => null,
+				'affiliate_created' => false,
+				'error_code'        => 'evidence_persist_failed',
+				'error_message'     => sanitize_text_field( mb_substr( $evidence_result->get_error_message(), 0, 500 ) ) . ' (user deleted)',
+				'attempt_count'     => (int) $ledger_row->attempt_count,
+				'started_at'        => $ledger_row->started_at,
+				'completed_at'      => null,
+			);
+		}
 
 		// Write user meta: first_name, last_name.
 		if ( $first_name || $last_name ) {
@@ -845,6 +985,13 @@ class Konx_Migration_Record_Executor {
 		$affiliate_id = (int) $affiliate_id;
 		$aff_created  = true;
 
+		// CHECKPOINT 2 (C3): Persist both user + affiliate evidence before terminal write.
+		// If the process crashes between this and mark_ledger_completed(), the inspector
+		// can classify the record as 'business_complete_unledgered'.
+		self::persist_resource_evidence( $ledger_row->id, $wp_user_id, true, $affiliate_id, true );
+		// Checkpoint failure is non-fatal here — proceed to mark_ledger_completed().
+		// The terminal write failure path already handles ledger_persist_failed.
+
 		// SUCCESS — mark ledger completed.
 		$ledger_result = self::mark_ledger_completed( $ledger_row->id, $wp_user_id, true, $affiliate_id, true );
 		if ( is_wp_error( $ledger_result ) ) {
@@ -908,11 +1055,29 @@ class Konx_Migration_Record_Executor {
 
 		// Verify WP user still exists.
 		if ( ! self::wp_user_exists( $wp_user_id ) ) {
-			self::mark_ledger_failed(
+			$ledger_write = self::mark_ledger_failed(
 				$ledger_row->id,
 				'stale_wp_user_not_found',
 				sprintf( 'WP user #%d no longer exists.', $wp_user_id )
 			);
+			if ( is_wp_error( $ledger_write ) ) {
+				return array(
+					'session_uuid'      => $session_uuid,
+					'plan_record_id'    => $plan_record_id,
+					'source_record_id'  => $source_record_id,
+					'action'            => 'link_wp',
+					'status'            => 'ledger_persist_failed',
+					'wp_user_id'        => null,
+					'wp_user_created'   => false,
+					'affiliate_id'      => null,
+					'affiliate_created' => false,
+					'error_code'        => 'ledger_persist_failed',
+					'error_message'     => 'stale_wp_user_not_found; ledger write also failed: ' . sanitize_text_field( mb_substr( $ledger_write->get_error_message(), 0, 400 ) ),
+					'attempt_count'     => (int) $ledger_row->attempt_count,
+					'started_at'        => $ledger_row->started_at,
+					'completed_at'      => null,
+				);
+			}
 
 			return array(
 				'session_uuid'      => $session_uuid,
@@ -935,11 +1100,29 @@ class Konx_Migration_Record_Executor {
 		// Verify no existing KonX affiliate for this user.
 		$existing_aff = self::konx_affiliate_for_user( $wp_user_id );
 		if ( $existing_aff ) {
-			self::mark_ledger_failed(
+			$ledger_write = self::mark_ledger_failed(
 				$ledger_row->id,
 				'user_already_has_affiliate',
 				sprintf( 'WP user #%d already has KonX affiliate #%d.', $wp_user_id, $existing_aff )
 			);
+			if ( is_wp_error( $ledger_write ) ) {
+				return array(
+					'session_uuid'      => $session_uuid,
+					'plan_record_id'    => $plan_record_id,
+					'source_record_id'  => $source_record_id,
+					'action'            => 'link_wp',
+					'status'            => 'ledger_persist_failed',
+					'wp_user_id'        => $wp_user_id,
+					'wp_user_created'   => false,
+					'affiliate_id'      => null,
+					'affiliate_created' => false,
+					'error_code'        => 'ledger_persist_failed',
+					'error_message'     => 'user_already_has_affiliate; ledger write also failed: ' . sanitize_text_field( mb_substr( $ledger_write->get_error_message(), 0, 400 ) ),
+					'attempt_count'     => (int) $ledger_row->attempt_count,
+					'started_at'        => $ledger_row->started_at,
+					'completed_at'      => null,
+				);
+			}
 
 			return array(
 				'session_uuid'      => $session_uuid,
@@ -977,8 +1160,26 @@ class Konx_Migration_Record_Executor {
 
 		if ( is_wp_error( $affiliate_id ) || false === $affiliate_id ) {
 			$err_msg = is_wp_error( $affiliate_id ) ? $affiliate_id->get_error_message() : 'insert_konx_affiliate failed';
-			self::mark_ledger_failed( $ledger_row->id, 'affiliate_insert_failed', $err_msg );
+			$ledger_write = self::mark_ledger_failed( $ledger_row->id, 'affiliate_insert_failed', $err_msg );
 			// Do NOT delete the pre-existing WP user.
+			if ( is_wp_error( $ledger_write ) ) {
+				return array(
+					'session_uuid'      => $session_uuid,
+					'plan_record_id'    => $plan_record_id,
+					'source_record_id'  => $source_record_id,
+					'action'            => 'link_wp',
+					'status'            => 'ledger_persist_failed',
+					'wp_user_id'        => $wp_user_id,
+					'wp_user_created'   => false,
+					'affiliate_id'      => null,
+					'affiliate_created' => false,
+					'error_code'        => 'ledger_persist_failed',
+					'error_message'     => 'affiliate_insert_failed; ledger write also failed: ' . sanitize_text_field( mb_substr( $ledger_write->get_error_message(), 0, 400 ) ),
+					'attempt_count'     => (int) $ledger_row->attempt_count,
+					'started_at'        => $ledger_row->started_at,
+					'completed_at'      => null,
+				);
+			}
 
 			return array(
 				'session_uuid'      => $session_uuid,
@@ -999,6 +1200,10 @@ class Konx_Migration_Record_Executor {
 		}
 
 		$affiliate_id  = (int) $affiliate_id;
+
+		// CHECKPOINT (C3): Persist affiliate evidence before terminal write.
+		self::persist_resource_evidence( $ledger_row->id, $wp_user_id, false, $affiliate_id, true );
+
 		$ledger_result = self::mark_ledger_completed( $ledger_row->id, $wp_user_id, false, $affiliate_id, true );
 		if ( is_wp_error( $ledger_result ) ) {
 			return array(
@@ -1067,11 +1272,29 @@ class Konx_Migration_Record_Executor {
 		);
 
 		if ( ! $ca_row ) {
-			self::mark_ledger_failed(
+			$ledger_write = self::mark_ledger_failed(
 				$ledger_row->id,
 				'stale_ca_row_not_found',
 				sprintf( 'CA row #%d no longer exists.', $coupon_affiliate_id )
 			);
+			if ( is_wp_error( $ledger_write ) ) {
+				return array(
+					'session_uuid'      => $session_uuid,
+					'plan_record_id'    => $plan_record_id,
+					'source_record_id'  => $source_record_id,
+					'action'            => 'link_ca',
+					'status'            => 'ledger_persist_failed',
+					'wp_user_id'        => null,
+					'wp_user_created'   => false,
+					'affiliate_id'      => null,
+					'affiliate_created' => false,
+					'error_code'        => 'ledger_persist_failed',
+					'error_message'     => 'stale_ca_row_not_found; ledger write also failed: ' . sanitize_text_field( mb_substr( $ledger_write->get_error_message(), 0, 400 ) ),
+					'attempt_count'     => (int) $ledger_row->attempt_count,
+					'started_at'        => $ledger_row->started_at,
+					'completed_at'      => null,
+				);
+			}
 
 			return array(
 				'session_uuid'      => $session_uuid,
@@ -1095,11 +1318,29 @@ class Konx_Migration_Record_Executor {
 
 		// Verify CA userid still matches frozen wp_user_id.
 		if ( $wp_user_id_frozen > 0 && $ca_userid !== $wp_user_id_frozen ) {
-			self::mark_ledger_failed(
+			$ledger_write = self::mark_ledger_failed(
 				$ledger_row->id,
 				'ca_user_mismatch',
 				sprintf( 'CA#%d userid changed. Frozen=%d Actual=%d.', $coupon_affiliate_id, $wp_user_id_frozen, $ca_userid )
 			);
+			if ( is_wp_error( $ledger_write ) ) {
+				return array(
+					'session_uuid'      => $session_uuid,
+					'plan_record_id'    => $plan_record_id,
+					'source_record_id'  => $source_record_id,
+					'action'            => 'link_ca',
+					'status'            => 'ledger_persist_failed',
+					'wp_user_id'        => null,
+					'wp_user_created'   => false,
+					'affiliate_id'      => null,
+					'affiliate_created' => false,
+					'error_code'        => 'ledger_persist_failed',
+					'error_message'     => 'ca_user_mismatch; ledger write also failed: ' . sanitize_text_field( mb_substr( $ledger_write->get_error_message(), 0, 400 ) ),
+					'attempt_count'     => (int) $ledger_row->attempt_count,
+					'started_at'        => $ledger_row->started_at,
+					'completed_at'      => null,
+				);
+			}
 
 			return array(
 				'session_uuid'      => $session_uuid,
@@ -1128,11 +1369,29 @@ class Konx_Migration_Record_Executor {
 
 		// Verify WP user exists.
 		if ( ! self::wp_user_exists( $wp_user_id ) ) {
-			self::mark_ledger_failed(
+			$ledger_write = self::mark_ledger_failed(
 				$ledger_row->id,
 				'stale_wp_user_not_found',
 				sprintf( 'WP user #%d no longer exists.', $wp_user_id )
 			);
+			if ( is_wp_error( $ledger_write ) ) {
+				return array(
+					'session_uuid'      => $session_uuid,
+					'plan_record_id'    => $plan_record_id,
+					'source_record_id'  => $source_record_id,
+					'action'            => 'link_ca',
+					'status'            => 'ledger_persist_failed',
+					'wp_user_id'        => null,
+					'wp_user_created'   => false,
+					'affiliate_id'      => null,
+					'affiliate_created' => false,
+					'error_code'        => 'ledger_persist_failed',
+					'error_message'     => 'stale_wp_user_not_found; ledger write also failed: ' . sanitize_text_field( mb_substr( $ledger_write->get_error_message(), 0, 400 ) ),
+					'attempt_count'     => (int) $ledger_row->attempt_count,
+					'started_at'        => $ledger_row->started_at,
+					'completed_at'      => null,
+				);
+			}
 
 			return array(
 				'session_uuid'      => $session_uuid,
@@ -1155,11 +1414,29 @@ class Konx_Migration_Record_Executor {
 		// Verify no existing KonX affiliate.
 		$existing_aff = self::konx_affiliate_for_user( $wp_user_id );
 		if ( $existing_aff ) {
-			self::mark_ledger_failed(
+			$ledger_write = self::mark_ledger_failed(
 				$ledger_row->id,
 				'user_already_has_affiliate',
 				sprintf( 'WP user #%d already has KonX affiliate #%d.', $wp_user_id, $existing_aff )
 			);
+			if ( is_wp_error( $ledger_write ) ) {
+				return array(
+					'session_uuid'      => $session_uuid,
+					'plan_record_id'    => $plan_record_id,
+					'source_record_id'  => $source_record_id,
+					'action'            => 'link_ca',
+					'status'            => 'ledger_persist_failed',
+					'wp_user_id'        => $wp_user_id,
+					'wp_user_created'   => false,
+					'affiliate_id'      => null,
+					'affiliate_created' => false,
+					'error_code'        => 'ledger_persist_failed',
+					'error_message'     => 'user_already_has_affiliate; ledger write also failed: ' . sanitize_text_field( mb_substr( $ledger_write->get_error_message(), 0, 400 ) ),
+					'attempt_count'     => (int) $ledger_row->attempt_count,
+					'started_at'        => $ledger_row->started_at,
+					'completed_at'      => null,
+				);
+			}
 
 			return array(
 				'session_uuid'      => $session_uuid,
@@ -1197,8 +1474,26 @@ class Konx_Migration_Record_Executor {
 
 		if ( is_wp_error( $affiliate_id ) || false === $affiliate_id ) {
 			$err_msg = is_wp_error( $affiliate_id ) ? $affiliate_id->get_error_message() : 'insert_konx_affiliate failed';
-			self::mark_ledger_failed( $ledger_row->id, 'affiliate_insert_failed', $err_msg );
+			$ledger_write = self::mark_ledger_failed( $ledger_row->id, 'affiliate_insert_failed', $err_msg );
 			// CA table: SELECT only — never modify.
+			if ( is_wp_error( $ledger_write ) ) {
+				return array(
+					'session_uuid'      => $session_uuid,
+					'plan_record_id'    => $plan_record_id,
+					'source_record_id'  => $source_record_id,
+					'action'            => 'link_ca',
+					'status'            => 'ledger_persist_failed',
+					'wp_user_id'        => $wp_user_id,
+					'wp_user_created'   => false,
+					'affiliate_id'      => null,
+					'affiliate_created' => false,
+					'error_code'        => 'ledger_persist_failed',
+					'error_message'     => 'affiliate_insert_failed; ledger write also failed: ' . sanitize_text_field( mb_substr( $ledger_write->get_error_message(), 0, 400 ) ),
+					'attempt_count'     => (int) $ledger_row->attempt_count,
+					'started_at'        => $ledger_row->started_at,
+					'completed_at'      => null,
+				);
+			}
 
 			return array(
 				'session_uuid'      => $session_uuid,
@@ -1219,6 +1514,10 @@ class Konx_Migration_Record_Executor {
 		}
 
 		$affiliate_id  = (int) $affiliate_id;
+
+		// CHECKPOINT (C3): Persist affiliate evidence before terminal write.
+		self::persist_resource_evidence( $ledger_row->id, $wp_user_id, false, $affiliate_id, true );
+
 		$ledger_result = self::mark_ledger_completed( $ledger_row->id, $wp_user_id, false, $affiliate_id, true );
 		if ( is_wp_error( $ledger_result ) ) {
 			return array(
@@ -1347,10 +1646,14 @@ class Konx_Migration_Record_Executor {
 			array( '%d' )
 		);
 
-		if ( false === $result ) {
+		if ( false === $result || 0 === (int) $result ) {
 			return new \WP_Error(
 				'ledger_persist_failed',
-				sprintf( 'Failed to mark ledger row #%d as failed.', absint( $ledger_row_id ) )
+				sprintf(
+					'Failed to mark ledger row #%d as failed (rows_affected=%s).',
+					absint( $ledger_row_id ),
+					json_encode( $result )
+				)
 			);
 		}
 
@@ -1399,10 +1702,14 @@ class Konx_Migration_Record_Executor {
 			array( '%d' )
 		);
 
-		if ( false === $result ) {
+		if ( false === $result || 0 === (int) $result ) {
 			return new \WP_Error(
 				'ledger_persist_failed',
-				sprintf( 'Failed to mark ledger row #%d as partial.', absint( $ledger_row_id ) )
+				sprintf(
+					'Failed to mark ledger row #%d as partial (rows_affected=%s).',
+					absint( $ledger_row_id ),
+					json_encode( $result )
+				)
 			);
 		}
 
@@ -1434,6 +1741,63 @@ class Konx_Migration_Record_Executor {
 			null,
 			array( '%d' )
 		);
+	}
+
+	/**
+	 * Persist resource evidence to the ledger row without changing its status.
+	 *
+	 * Called at intermediate checkpoints to make created resource IDs durable
+	 * even if the process terminates before the terminal ledger write.
+	 * Status remains 'processing'. Only wp_user_id, wp_user_created,
+	 * affiliate_id, affiliate_created, and updated_at are written.
+	 *
+	 * This is the crash-window hardening mechanism for Phase 24C-6F (C3).
+	 *
+	 * @param int       $ledger_row_id   Ledger table primary key.
+	 * @param int|null  $wp_user_id      WP user ID (or null).
+	 * @param bool      $wp_user_created True if created this attempt.
+	 * @param int|null  $affiliate_id    Affiliate ID (or null).
+	 * @param bool      $affiliate_created True if affiliate was created.
+	 * @return true|WP_Error True on success; WP_Error on persistence failure.
+	 */
+	private static function persist_resource_evidence( $ledger_row_id, $wp_user_id, $wp_user_created, $affiliate_id, $affiliate_created ) {
+		global $wpdb;
+
+		// Test-only injection: simulate evidence persistence failure.
+		if ( self::$test_persist_evidence_fail ) {
+			return new \WP_Error( 'test_injected_evidence_fail', 'Test-injected resource evidence persistence failure (Phase 24C-6F).' );
+		}
+
+		$table = $wpdb->prefix . Konx_Migration_Execution_Ledger::TABLE;
+		$now   = current_time( 'mysql', true );
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$result = $wpdb->update(
+			$table,
+			array(
+				'wp_user_id'        => $wp_user_id ? absint( $wp_user_id ) : null,
+				'wp_user_created'   => $wp_user_created ? 1 : 0,
+				'affiliate_id'      => $affiliate_id ? absint( $affiliate_id ) : null,
+				'affiliate_created' => $affiliate_created ? 1 : 0,
+				'updated_at'        => $now,
+			),
+			array( 'id' => absint( $ledger_row_id ) ),
+			null,
+			array( '%d' )
+		);
+
+		if ( false === $result || 0 === (int) $result ) {
+			return new \WP_Error(
+				'evidence_persist_failed',
+				sprintf(
+					'Failed to persist resource evidence for ledger row #%d (rows_affected=%s).',
+					absint( $ledger_row_id ),
+					json_encode( $result )
+				)
+			);
+		}
+
+		return true;
 	}
 
 	// ------------------------------------------------------------------

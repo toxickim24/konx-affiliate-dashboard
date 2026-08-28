@@ -21,6 +21,13 @@
  *   rolled_back — (future) execution was reversed
  *   invalidated — snapshot is stale (e.g. source/schema changed after freeze)
  *
+ * STATUS MUTATION CONTRACT (Phase 24C-6F):
+ *   update_status() is now private — it is the internal DB persistence helper
+ *   and must not be called by external code. All external lifecycle mutations
+ *   must go through transition(), freeze(), or invalidate(). These methods
+ *   enforce the allowed-transitions map and canonical-session protection before
+ *   delegating to update_status().
+ *
  * IMMUTABILITY CONTRACT:
  *   Once a session reaches 'frozen', its core identity fields (plan hash,
  *   record count, decision counts, plugin version, schema version, source hash)
@@ -302,35 +309,25 @@ class Konx_Migration_Exec_Session {
 	/**
 	 * Transition a session to 'frozen' status.
 	 *
-	 * Once frozen, the session's identity fields cannot be changed.
-	 * Only allowed from 'draft' status.
+	 * Delegates to transition() which enforces the allowed-transitions map
+	 * (draft → frozen), canonical-session protection, and non-existent-session
+	 * detection. The old guard logic (get() + draft check) is fully handled
+	 * by transition().
 	 *
 	 * @param string $session_uuid The session UUID.
 	 * @return true|WP_Error True on success, WP_Error on failure.
 	 */
 	public static function freeze( $session_uuid ) {
-		$session = self::get( $session_uuid );
-
-		if ( ! $session ) {
-			return new \WP_Error( 'not_found', __( 'Execution session not found.', 'konx-affiliate-dashboard' ) );
-		}
-
-		if ( 'draft' !== $session->status ) {
-			return new \WP_Error(
-				'invalid_transition',
-				sprintf(
-					/* translators: %s: current status */
-					__( 'Cannot freeze session in "%s" status. Only draft sessions can be frozen.', 'konx-affiliate-dashboard' ),
-					$session->status
-				)
-			);
-		}
-
-		return self::update_status( $session_uuid, 'frozen' );
+		return self::transition( $session_uuid, 'frozen' );
 	}
 
 	/**
 	 * Invalidate a session.
+	 *
+	 * Delegates to transition() which enforces the allowed-transitions map
+	 * (draft → invalidated, frozen → invalidated), canonical-session protection,
+	 * and non-existent-session detection. The old guard logic is fully handled
+	 * by transition().
 	 *
 	 * Use when the underlying FMP changes after a session was frozen.
 	 * Does not delete the session — historical record is preserved.
@@ -339,25 +336,7 @@ class Konx_Migration_Exec_Session {
 	 * @return true|WP_Error True on success, WP_Error on failure.
 	 */
 	public static function invalidate( $session_uuid ) {
-		$session = self::get( $session_uuid );
-
-		if ( ! $session ) {
-			return new \WP_Error( 'not_found', __( 'Execution session not found.', 'konx-affiliate-dashboard' ) );
-		}
-
-		// Cannot invalidate a session that has already been executed.
-		if ( in_array( $session->status, array( 'running', 'completed' ), true ) ) {
-			return new \WP_Error(
-				'invalid_transition',
-				sprintf(
-					/* translators: %s: current status */
-					__( 'Cannot invalidate a "%s" session.', 'konx-affiliate-dashboard' ),
-					$session->status
-				)
-			);
-		}
-
-		return self::update_status( $session_uuid, 'invalidated' );
+		return self::transition( $session_uuid, 'invalidated' );
 	}
 
 	/**
@@ -415,13 +394,18 @@ class Konx_Migration_Exec_Session {
 	}
 
 	/**
-	 * Update session status.
+	 * Internal persistence helper — update session status in the database.
+	 *
+	 * This is a private method. All external lifecycle mutations must go through
+	 * transition(), freeze(), or invalidate(). Those methods enforce the
+	 * allowed-transitions map and canonical-session protection before delegating
+	 * here (Phase 24C-6F: C4).
 	 *
 	 * @param string $session_uuid The session UUID.
 	 * @param string $status       New status.
 	 * @return true|WP_Error True on success.
 	 */
-	public static function update_status( $session_uuid, $status ) {
+	private static function update_status( $session_uuid, $status ) {
 		global $wpdb;
 
 		if ( ! in_array( $status, self::$valid_statuses, true ) ) {
