@@ -19,7 +19,8 @@
  *   Group 13: Compensation failure → partial state
  *
  * SAFETY GUARANTEE:
- *   Only synthetic sessions (status='test_execution') are executed.
+ *   Only synthetic sessions (status='frozen') are executed. Sessions remain in
+ *   'frozen' status throughout — Phase 24C-6E removed the test_execution status.
  *   The canonical session '395e2b79-1e0a-49e8-9ea6-1ae146c9a54d' is never
  *   touched. All synthetic WP users created are cleaned up at test end.
  *   wp_konx_affiliates delta must be 0 at test end.
@@ -143,8 +144,8 @@ register_shutdown_function( 'teardown_all_synthetic_data' );
 // Returns [ 'session_uuid', 'session_id', 'plan_row_id', 'ledger_row_id', 'po10_id' ]
 // or null on failure.
 //
-// The session will be in 'frozen' state initially — caller must call
-// Konx_Migration_Exec_Session::set_test_execution_status() to promote it.
+// The session will be in 'frozen' state. Phase 24C-6E: no status promotion needed.
+// Sessions are executed directly in 'frozen' status.
 // ---------------------------------------------------------------------------
 
 $_re_test_po10_counter = 9_000_001; // High ID range — never overlaps real records.
@@ -241,22 +242,24 @@ function re_create_test_session_with_plan(
 }
 
 /**
- * Promote a session to test_execution status, setting the FMP override so the
- * revalidator's plan-hash check passes during execution.
+ * Prepare a frozen test session for execution by setting the FMP option override.
  *
- * Returns true on success.
+ * Phase 24C-6E: Sessions remain in 'frozen' status — test_execution status was
+ * removed. This function only sets the wp_options override so the revalidator's
+ * plan-hash parity check passes. No session status change is performed.
+ *
+ * The caller is responsible for clearing the override after execution:
+ *   test_clear_option_override('konx_migration_state');
+ *
+ * Returns true unconditionally (the session is already in the correct status).
  */
 function re_promote_to_test_execution( $session_uuid, $decisions ) {
 	test_set_option_override(
 		'konx_migration_state',
 		array( 'final_migration_plan' => array( 'decisions' => $decisions ) )
 	);
-
-	$ok = Konx_Migration_Exec_Session::set_test_execution_status( $session_uuid );
-
-	// Keep the override active during the execute_record() call — the caller
-	// is responsible for clearing it after execution.
-	return $ok;
+	// Session remains 'frozen' — no status change required.
+	return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -303,15 +306,20 @@ $r = Konx_Migration_Record_Executor::execute_record( 'ffffffff-0000-4000-8000-00
 re_assert_eq( 'G1-T01: non-existent session → session_not_found', 'session_not_found', $r['error_code'] );
 re_assert_eq( 'G1-T01: status=failed', 'failed', $r['status'] );
 
-// G1-T02: Session in wrong status (frozen, not test_execution).
+// G1-T02: Session in wrong status (invalidated, not frozen).
+// Phase 24C-6E: executor requires 'frozen'. Any other status must return invalid_session_status.
 $g1t02 = re_create_test_session_with_plan( 'create' );
 if ( $g1t02 ) {
-	// Session is 'frozen' — do NOT promote to test_execution.
-	// Execute with wrong status.
+	// Force session to 'invalidated' — execution must be refused.
+	$wpdb->update(
+		$wpdb->prefix . 'konx_migration_exec_sessions',
+		array( 'status' => 'invalidated' ),
+		array( 'session_uuid' => $g1t02['session_uuid'] )
+	);
 	test_set_option_override( 'konx_migration_state', array( 'final_migration_plan' => array( 'decisions' => $g1t02['decisions'] ) ) );
 	$r = Konx_Migration_Record_Executor::execute_record( $g1t02['session_uuid'], $g1t02['plan_row_id'] );
 	test_clear_option_override( 'konx_migration_state' );
-	re_assert_eq( 'G1-T02: frozen session → invalid_session_status', 'invalid_session_status', $r['error_code'] );
+	re_assert_eq( 'G1-T02: invalidated session → invalid_session_status', 'invalid_session_status', $r['error_code'] );
 	re_assert_eq( 'G1-T02: status=failed', 'failed', $r['status'] );
 	safe_cleanup_test_session( $g1t02['session_uuid'], $g1t02['session_id'] );
 } else {

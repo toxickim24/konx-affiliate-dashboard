@@ -27,9 +27,9 @@ if ( ! defined( 'OBJECT' ) ) {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 24C-6D test execution gate.
-// Enables Konx_Migration_Record_Executor::execute_record() and
-// Konx_Migration_Exec_Session::set_test_execution_status().
+// Phase 24C-6D/6E test execution gate.
+// Enables Konx_Migration_Record_Executor::execute_record().
+// Phase 24C-6E: set_test_execution_status() removed. Sessions remain 'frozen'.
 // MUST NOT be defined in production wp-config.php or plugin bootstrap.
 // ---------------------------------------------------------------------------
 if ( ! defined( 'KONX_MIGRATION_TEST_EXECUTION_ENABLED' ) ) {
